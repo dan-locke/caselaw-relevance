@@ -1,0 +1,111 @@
+{{ define "title" }}
+	Topic index
+{{ end }}
+
+{{define "content"}}
+<div class="container" id="vm">
+	<div class="row justify-content-start align-items-start">
+		<div class="col-7">
+			<div class="card">
+				<div id="card-nav-content" class="card-body tab-content">
+					<h6 class="card-subtitle mb-2 text-muted">Topics</h6>
+					<p class="card-text">
+						<ul class="list-group border-right-0 border-left-0">
+							<li class="list-group-item  border-right-0 border-left-0" v-for="t in topics">
+								<a v-bind:href="'/topic/' + t.Topic" >[[ t.Topic ]] | [[ t.Name ]]
+									<span class="badge badge-info">Assessed [[ t.Assessed ]]</span>
+ 								</a>
+							</li>
+						</ul>
+						<!-- [[ numTopics ]] [[ numPages ]] -->
+					</p>
+					<!-- <ul class="pagination">
+						<li class="page-item">
+							<a class="page-link" href="#" aria-label="Previous" v-on:click="prevPage">
+								<span aria-hidden="true">&laquo;</span>
+								<span class="sr-only">Previous</span>
+							</a>
+						</li>
+						<li class="page-item" v-for="p in numPages"><a class="page-link" href="#">[ p ]</a></li>
+						<li class="page-item">
+							<a class="page-link" href="#" aria-label="Next" v-on:click="nextPage">
+								<span aria-hidden="true">&raquo;</span>
+								<span class="sr-only">Next</span>
+							</a>
+						</li>
+					</ul> -->
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+{{ end }}
+
+{{ define "js" }}
+<script type="text/javascript">
+
+	var vm = new Vue({
+		el: '#vm',
+		delimiters : ['[[', ']]'],
+		data: {
+			topics: [],
+			// page: 0,
+			// perPage: 10,
+			// Items: Number,
+		},
+
+		computed: {
+			// numTopics: function() {
+			// 	return this.assessments.length
+			// },
+			// numPages: function() {
+			// 	return Math.ceil(this.numTopics() / this.perPage)
+			// },
+			// visiblePageRange: function() {
+			//
+			// }
+
+		},
+		methods: {
+			getData: function() {
+				var vm = this
+				// // get topic data.
+				var xhr = new XMLHttpRequest();
+				xhr.open('GET', '/data', true);
+				xhr.send();
+				// console.log(xhr)
+				xhr.onreadystatechange = function () {
+					// console.log(xhr.readyState, xhr.status);
+					if (xhr.readyState === 4 && xhr.status === 200) {
+						var res = JSON.parse(xhr.responseText);
+						vm.topics = res
+					} else if (xhr.readyState === 4 && xhr.status !== 200) {
+						window.alert('Something went wrong getting page data!')
+					}
+				};
+			},
+
+			// nextPage: function(event) {
+			// 	console.log(numPages, page);
+			// 	this.page++;
+			// 	if (this.page >= this.numPages) {
+			// 		this.page = 0;
+			// 	}
+			// },
+			//
+			// prevPage: function(event) {
+			// 	this.page--;
+			// 	if (this.page < 0) {
+			// 		this.page = this.numPages;
+			// 	}
+			// },
+
+		},
+
+		created: function() {
+			this.getData();
+		},
+
+	});
+</script>
+{{ end }}

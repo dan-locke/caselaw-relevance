@@ -1,0 +1,40 @@
+{{ define "title" }}
+ {{ .Id}} - {{ .CaseName }}
+{{ end }}
+
+{{ define "content" }}
+<div class="container" id="vm">
+	<div class="row justify-content-start align-items-start">
+		<div class="col">
+			<div class="card">
+				<div class="card-header">[ getCurrentDoc().case_name ]</div>
+				<div class="card-body">
+					<h6 class="card-subtitle mb-2 text-muted">[ getCurrentDoc().id ] | [ getCurrentDoc().date_filed ]</h6>
+					<p class="card-text" style="overflow-y=scroll">
+						<p v-html="getCurrentDoc().html"></p>
+					</p>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+{{ end }}
+
+{{ define "js" }}
+<script type="text/javascript">
+	var doc = {{ . }}
+
+	var vm = new Vue({
+		el: '#vm',
+		delimiters : ['[', ']'],
+		data: {
+			doc: doc
+		},
+		methods: {
+			getCurrentDoc: function() {
+				return this.doc
+			}
+		}
+	});
+</script>
+{{ end }}

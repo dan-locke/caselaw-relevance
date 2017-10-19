@@ -1,0 +1,5 @@
+.DS_Store
+caselaw-relevance
+config.json
+topic/*
+topic.dat

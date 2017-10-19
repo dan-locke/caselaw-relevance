@@ -1,0 +1,386 @@
+{{ define "title" }}
+	{{ .Id}} - {{ .CaseTitle }}
+{{ end }}
+
+{{ define "content" }}
+<div class="container" id="vm">
+	<div class="row justify-content-start align-items-start">
+		<div class="col-5">
+			<div class="card">
+				<div class="card-header">
+					<ul id="card-nav" class="nav nav-tabs card-header-tabs" role="tablist">
+						<li class="nav-item">
+							<a id="topic-tab" class="nav-link active" data-toggle="tab" aria-controls="topic" aria-expanded="true" href="#topic">Topic {{ .Id }}
+							</a>
+						</li>
+						<li class="nav-item">
+							<a id="tag-tab" class="nav-link" data-toggle="tab" aria-controls="tags" href="#tags">Tags</a>
+						</li>
+						<li class="nav-item">
+							<a id="docs-tab" class="nav-link" data-toggle="tab" aria-controls="docs" href="#docs">Docs</a>
+						</li>
+						<li class="nav-item">
+							<a id="search-tab" class="nav-link" data-toggle="tab" aria-controls="srch" href="#srch">Search</a>
+						</li>
+					</ul>
+				</div>
+				<div id="card-nav-content" class="card-body tab-content">
+					<div role="tabpanel" class="tab-pane fade show active" id="topic" aria-labelledby="topic-tab">
+						<h6 class="card-subtitle mb-2 text-muted">{{ .CaseTitle }} | {{ .CaseId }}</h6>
+						<p class="card-text">
+							<ul class="list-group border-right-0 border-left-0 ">
+								<li class="list-group-item border-right-0 border-left-0 border-top-0">
+									{{ range $i, $case := .CitedCase }}
+									{{ if $i }}
+									|
+									{{ end }}
+									{{ $case }}
+									{{ end }}
+								</li>
+								<li class="list-group-item border-right-0 border-left-0">
+									{{ range $i, $id := .CitedId }}
+									{{ if $i }}
+									|
+									{{ end }}
+									{{ $id }}
+									{{ end }}
+								</li>
+								<li class="list-group-item border-right-0 border-left-0">
+									{{ range $i, $keyword := .RelevantKeywords }}
+									{{ if $i }}
+									|
+									{{ end }}
+									{{ $keyword }}
+									{{ end }}
+								</li>
+								<li class="list-group-item border-right-0 border-left-0">{{ .CitingSentence }}</li>
+								<li class="list-group-item border-right-0 border-left-0 border-bottom-0">{{ .CitingParagraph }}</li>
+							</ul>
+						</p>
+						<button class="btn btn-primary" v-on:click="submit">Submit</button>
+					</div>
+					<div role="tabpanel" class="tab-pane fade" id="tags" aria-labelledby="tag-tab">
+						<h6 class="card-subtitle mb-2 text-muted">Current tags</h6>
+						<p class="card-text" id="seltxt">
+							<ul class="list-group border-right-0 border-left-0">
+								<li class="list-group-item  border-right-0 border-left-0" v-for="tag in tags">
+									[[ tag.start ]] - [[ tag.end ]] | [[ tag.text ]]
+									<span class="badge badge-primary">relevant</span>
+								</li>
+							</ul>
+						</p>
+						<!-- <div class="row">
+							<div class="form-inline">
+								<label class="mr-sm-2" for="ttype-sel">Tag type</label>
+								<select class="custom-select mb-2 mr-sm-2 mb-sm-0" id="ttype-sel">
+									<option disabled value="">Select</option>
+									<option v-for="t in ttypes">[ t ]</option>
+								</select>
+							</div>
+						</div> -->
+						<button type="button" class="btn btn-primary" v-on:click="getSelection">Tag</button>
+					</div>
+					<div role="tabpanel" class="tab-pane fade" id="docs" aria-labelledby="docs-tab">
+						<h6 class="card-subtitle mb-2 text-muted">Documents</h6>
+						<p class="card-text" id="seltxt">
+							<ul class="list-group border-right-0 border-left-0">
+								<li class="list-group-item  border-right-0 border-left-0" v-for="(doc, i) in hits">
+									<a href="#" v-on:click="changeDoc(i)">[[ doc.case_name ]]</a>
+									<span v-if="doc.relevance === ''">
+										<span class="badge badge-danger">Not assessed</span>
+									</span>
+									<span v-else>
+										<span v-if="doc.stored">
+											<span class="badge badge-success">Assessed</span>
+										</span>
+										<span v-else>
+											<span class="badge badge-warning">Assessed</span>
+										</span>
+									</span>
+								</li>
+							</ul>
+						</p>
+					</div>
+					<div role="tabpanel" class="tab-pane fade" id="srch" aria-labelledby="srch-tab">
+						<h6 class="card-subtitle mb-2 text-muted">Documents</h6>
+						<p class="card-text">
+							Search for further results. These will be added to the list of current documents that you are evaluating. A maximum of 20 results for each search are returned.
+							<br>
+							<form class="form-inline my-2 my-lg-0">
+								<input class="form-control mr-sm-2" type="text" placeholder="Search" id="search-input" v-model="query">
+								<button class="btn btn-outline-success my-2 my-sm-0" type="submit" v-on:click="searchTopic">Search</button>
+							</form>
+							<br>
+							<span v-if="queries">
+								<ul class="list-group border-right-0 border-left-0">
+									<li class="list-group-item  border-right-0 border-left-0" v-for="q in queries">
+										[[ q ]]
+									</li>
+								</ul>
+							</span>
+						</p>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="col-7">
+			<div class="card">
+				<div class="card-header">Assessing [[ currentDoc + 1 ]] of [[ numHits ]] </div>
+				<div class="card-body">
+					<h6 class="card-subtitle mb-2 text-muted"> [[ getCurrentDoc().case_name ]] | [[ getCurrentDoc().id ]] </h6>
+					<p class="card-text" style="overflow-y=scroll">
+						<p v-html="getCurrentDoc().html" id="j-txt"></p>
+					</p>
+					<div class="row">
+						<div class="col">
+							<button class="btn btn-secondary" v-on:click="prevDoc">Previous</button>
+							<button class="btn btn-secondary" v-on:click="nextDoc">Next</button>
+						</div>
+						<div class="form-inline">
+							<label class="mr-sm-2" for="rl-sel">Relevance</label>
+							<select class="custom-select mb-2 mr-sm-2 mb-sm-0" v-model="getCurrentDoc().relevance" id="rl-sel">
+								<option v-for="l in rl">[[ l ]]</option>
+							</select>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+{{ end }}
+
+{{ define "js" }}
+<script type="text/javascript">
+	var topicId = {{ .Id }};
+	var relevanceLevels = ['not relevant', 'background', 'explanatory', 'on point'];
+	// var tagTypes = ['citation', 'quote', 'relevant']
+	// var addTypes = ['query', 'other'];
+
+	var vm = new Vue({
+		el: '#vm',
+		delimiters : ['[[', ']]'],
+		data: {
+			currentDoc: 0,
+			hits: [],
+			// numHits: 0,
+			tags: [],
+			rl: relevanceLevels,
+			queries: [],
+			query: "",
+			// ttypes: tagTypes,
+			// ttype: undefined,
+		},
+		computed: {
+				numHits: function() {
+					return this.hits.length;
+				}
+		},
+
+		methods: {
+			getData: function() {
+				var vm = this
+				// // get topic data.
+				var xhr = new XMLHttpRequest();
+				xhr.open('GET', '/data/' + topicId, true);
+				xhr.send();
+				// console.log(xhr)
+				xhr.onreadystatechange = function () {
+					// console.log(xhr.readyState, xhr.status);
+					if (xhr.readyState === 4 && xhr.status === 200) {
+						var sres = JSON.parse(xhr.responseText);
+						vm.queries = sres.Queries
+						vm.hits = sres.Results
+						console.log(vm.hits);
+					} else if (xhr.readyState === 4 && xhr.status !== 200) {
+						window.alert('Something went wrong getting page data!')
+					}
+				};
+			},
+
+			getTags: function() {
+				var vm = this
+				var xhr = new XMLHttpRequest();
+				xhr.open('GET', '/tags/' + topicId + '/' + vm.hits[vm.currentDoc].id,  true);
+				xhr.send();
+				console.log(xhr)
+				xhr.onreadystatechange = function () {
+					console.log(xhr.readyState, xhr.status);
+					if (xhr.readyState === 4 && xhr.status === 200) {
+						var sres = JSON.parse(xhr.responseText);
+						vm.tags = sres
+					} else if (xhr.readyState === 4 && xhr.status !== 200) {
+						window.alert('Something went wrong getting tag data!')
+					}
+				};
+			},
+
+			getCurrentDoc : function() {
+				return this.hits[this.currentDoc];
+			},
+
+			changeDoc: function(i) {
+				this.currentDoc = i;
+				this.getTags();
+			},
+
+			nextDoc: function(event) {
+				if (this.assess()) {
+					this.currentDoc++;
+					if (this.currentDoc >= this.numHits) {
+						this.currentDoc = 0;
+					}
+					this.getTags();
+				}
+			},
+
+			prevDoc: function(event) {
+				if (this.assess()) {
+					this.currentDoc--;
+					if (this.currentDoc < 0) {
+						this.currentDoc = this.numHits;
+					}
+					this.getTags();
+				}
+			},
+
+			assess: function() {
+				var h = this.hits[this.currentDoc];
+				if (h.relevance != undefined) {
+					var xhr = new XMLHttpRequest();
+					xhr.open('POST', '/assess');
+					xhr.setRequestHeader('Content-Type', 'application/json');
+					xhr.send(JSON.stringify({'id': topicId, 'assessments':
+						[{'id': parseInt(h.id), 'relevance': h.relevance}]}));
+					xhr.onreadystatechange = function () {
+						// console.log(xhr.readyState, xhr.status);
+						if (xhr.readyState === 4 && xhr.status === 200) {
+							h.stored = true;
+							return true
+						} else if (xhr.readyState === 4 && xhr.status !== 200) {
+							window.alert('Something went wrong submitting previous doc!');
+							return false
+						}
+					};
+				}
+				return true
+			},
+
+			submit: function() {
+				var xhr = new XMLHttpRequest();
+				xhr.open('POST', '/assess');
+				xhr.setRequestHeader('Content-Type', 'application/json');
+				var req = [];
+				for (var i = 0; i < this.hits.length; i++) {
+					var h = this.hits[i];
+					if (!h.stored) {
+						req.push({'id': parseInt(h.id), 'relevance': h.relevance})
+					}
+				}
+				xhr.send(JSON.stringify({'id': topicId, 'assessments': req}));
+				xhr.onreadystatechange = function () {
+					// console.log(xhr.readyState, xhr.status);
+					if (xhr.readyState === 4 && xhr.status === 200) {
+						window.location = '/'
+					} else if (xhr.readyState === 4 && xhr.status !== 200) {
+						window.alert('Something went wrong!')
+					}
+				};
+			},
+
+			// taken from https://stackoverflow.com/questions/
+			// 33544010/how-to-get-highlighted-text-positions-using-jquery
+			getSelection: function() {
+				var el = document.getElementById("j-txt");
+				var start = 0, end = 0;
+				var sel, range, priorRange;
+				// var type = 'citation';
+				// this.tagType = undefined;
+				if (typeof window.getSelection != "undefined") {
+					range = window.getSelection().getRangeAt(0);
+					priorRange = range.cloneRange();
+					console.log(priorRange)
+					priorRange.selectNodeContents(el);
+					priorRange.setEnd(range.startContainer, range.startOffset);
+					start = priorRange.toString().length;
+					end = start + range.toString().length;
+				} else if (typeof document.selection != "undefined" &&
+				(sel = document.selection).type != "Control") {
+					range = sel.createRange();
+					priorRange = document.body.createTextRange();
+					priorRange.moveToElementText(el);
+					priorRange.setEndPoint("EndToStart", range);
+					start = priorRange.text.length;
+					end = start + range.text.length;
+				}
+
+				this.tags.push({
+					docId: this.hits[this.currentDoc].id,
+					start: start,
+					end: end,
+					text: this.hits[this.currentDoc].html.substring(start, end),
+					// type: type,
+				})
+
+				var xhr = new XMLHttpRequest();
+				xhr.open('POST', '/tag');
+				xhr.setRequestHeader('Content-Type', 'application/json');
+				xhr.send(JSON.stringify({
+					'topic_id': topicId,
+					'doc_id': parseInt(this.hits[this.currentDoc].id),
+					'start': start,
+					'end': end,
+					// 'type': type,
+				}));
+				xhr.onreadystatechange = function () {
+					console.log(xhr.readyState, xhr.status);
+					if (xhr.readyState === 4 && xhr.status !== 200) {
+						window.alert('Something went wrong submitting the tag with positions ' + start + ' ' + end + '. Please let me know.')
+					}
+				};
+			},
+
+			searchTopic: function() {
+				var vm = this
+				if (vm.query != "") {
+					vm.queries.push(vm.query);
+					var xhr = new XMLHttpRequest();
+					xhr.open('POST', '/search');
+					xhr.setRequestHeader('Content-Type', 'application/json');
+					xhr.send(JSON.stringify({
+						'query': vm.query,
+						'topic': topicId,
+						'fields': ['id', 'case_name','date_filed', 'html']
+					}));
+					console.log(xhr);
+
+					xhr.onreadystatechange = function () {
+						console.log(xhr.readyState, xhr.status);
+						if (xhr.readyState === 4 && xhr.status === 200) {
+							var sres = JSON.parse(xhr.responseText);
+							for (var i = 0; i < sres.length; i++) {
+								vm.hits.push(sres[i]);
+							}
+						} else if (xhr.readyState === 4 && xhr.status !== 200) {
+							window.alert('Something went wrong with your search. Please let me know.')
+						}
+					};
+				}
+				return false;
+			}
+		},
+
+		watch : {
+			currentDoc: function() {
+				this.getTags();
+			}
+		},
+
+		created: function() {
+			this.getData();
+			// Fix tags not showing up on first page ...
+			this.getTags();
+		},
+	});
+</script>
+{{ end }}
