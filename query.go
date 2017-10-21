@@ -23,6 +23,8 @@ type topicSearchPostReq struct {
 
 	Fields []string  `json:"fields"`
 
+	Id []string `json:"ids"`
+
 }
 
 var textRe = regexp.MustCompile(`[^a-zA-Z0-9]+`)
@@ -80,6 +82,26 @@ func dbSaveQuery(db *sql.DB, query string, topic, user int64, date time.Time) (s
 		topic, query, user, date)
 }
 
+func dbGetUserQueries(db *sql.DB, topic string, user int64) ([]string, error) {
+	rows, err := db.Query("SELECT query FROM query WHERE topic_id = $1 AND user_id = $2",
+		topic, user)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+	queries := make([]string, 0)
+	for rows.Next() {
+		var query string
+		err := rows.Scan(&query)
+		if err != nil {
+			return nil, err
+		}
+		queries = append(queries, query)
+	}
+	return queries, nil
+}
+
 func (i *Instance) elasticSearchResponse(query []byte) ([]ApiCaseResponse, error) {
 	esRes, err := i.es.Search(i.searchIndex, query)
 	if err != nil {
@@ -122,6 +144,7 @@ func (i *Instance) elasticTopicQueryHits(queries []map[string]interface{}) ([]Ap
 	res := make([]ApiCaseResponse, 0)
 	seenId := map[string]bool{}
 	for _, q := range queries {
+		q["_source"] = []string{"id", "case_name"}
 		q["from"] = 0
 		q["size"] = 30
 		qry, err := json.Marshal(q)
@@ -150,6 +173,16 @@ func (i *Instance) elasticTopicQueryHits(queries []map[string]interface{}) ([]Ap
 
 // -----------------------------------------------------------------------------
 // For creating standard match queries from pieces of text
+func makeEsMatch(s string) map[string]interface{} {
+	return map[string]interface{} {
+		"query" : map[string]interface{} {
+			"plain_text" : s,
+		},
+		"from" : 0,
+		"size" : 30,
+	}
+}
+
 func createTextQuery(s string) map[string]interface{} {
 	nums := getNumbers(s)
 	text := cleanText(s)

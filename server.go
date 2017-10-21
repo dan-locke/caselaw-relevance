@@ -121,12 +121,14 @@ func (i *Instance) router() *mux.Router {
 
 	// Decision
 	gets.Handle("/decision/{docId}", handler{i, decisionViewHandler})
+	gets.Handle("/ddata/{docId}", handler{i, decisionHandler})
 
 	// Topics  -----------------------------------------------------------------
 	gets.Handle("/topics", handler{i, topicIndexViewHandler})
 	gets.Handle("/data", handler{i, topicIndexDataHandler})
 	gets.Handle("/topic/{topicId}", handler{i, topicViewHandler})
 	gets.Handle("/data/{topicId}", handler{i, topicDataHandler})
+	gets.Handle("/tdata/{topicId}/{docId}", handler{i, topicDecisionHandler})
 
 	// Database functions ------------------------------------------------------
 	gets.Handle("/tags/{topicId}/{docId}", handler{i, getTagHandler})

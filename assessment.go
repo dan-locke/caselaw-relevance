@@ -71,7 +71,7 @@ func dbSaveTopicAssessment(db *sql.DB, a Assessment) (sql.Result, error) {
 		a.DocId, a.TopicId, a.UserId, a.Relevance, a.Date)
 }
 
-func dbGetNumberAssessedPerTopic(db *sql.DB, user string) (map[string]int, error) {
+func dbGetNumberAssessedPerTopic(db *sql.DB, user int64) (map[string]int, error) {
 	rows, err := db.Query("SELECT topic_id, COUNT(DISTINCT doc_id) FROM assessment WHERE assessor = $1 GROUP BY topic_id", user)
 	if err != nil {
 		return nil, err
@@ -91,7 +91,7 @@ func dbGetNumberAssessedPerTopic(db *sql.DB, user string) (map[string]int, error
 	return assessed, nil
 }
 
-func dbGetAssessedPerTopic(db *sql.DB, user string, topicId int) (map[string]string, error) {
+func dbGetAssessedPerTopic(db *sql.DB, user int64, topicId string) (map[string]string, error) {
 	rows, err := db.Query("SELECT doc_id, relevant FROM assessment WHERE assessor = $1 AND topic_id = $2",
 		user, topicId)
 	if err != nil {

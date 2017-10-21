@@ -86,7 +86,7 @@
 							<ul class="list-group border-right-0 border-left-0">
 								<li class="list-group-item  border-right-0 border-left-0" v-for="(doc, i) in hits">
 									<a href="#" v-on:click="changeDoc(i)">[[ doc.case_name ]]</a>
-									<span v-if="doc.relevance === ''">
+									<span v-if="doc.relevance === '' || doc.relevance === undefined">
 										<span class="badge badge-danger">Not assessed</span>
 									</span>
 									<span v-else>
@@ -106,7 +106,7 @@
 						<p class="card-text">
 							Search for further results. These will be added to the list of current documents that you are evaluating. A maximum of 20 results for each search are returned.
 							<br>
-							<form class="form-inline my-2 my-lg-0">
+							<form action="#" class="form-inline my-2 my-lg-0">
 								<input class="form-control mr-sm-2" type="text" placeholder="Search" id="search-input" v-model="query">
 								<button class="btn btn-outline-success my-2 my-sm-0" type="submit" v-on:click="searchTopic">Search</button>
 							</form>
@@ -125,11 +125,23 @@
 		</div>
 		<div class="col-7">
 			<div class="card">
-				<div class="card-header">Assessing [[ currentDoc + 1 ]] of [[ numHits ]] </div>
+				<div class="card-header">Assessing [[ currentDoc + 1 ]] of [[ numHits ]]
+					<span v-if="getCurrentDoc().relevance === '' || getCurrentDoc().relevance === undefined">
+						<span class="badge badge-danger">Not assessed</span>
+					</span>
+					<span v-else>
+						<span v-if="getCurrentDoc().stored">
+							<span class="badge badge-success">Assessed</span>
+						</span>
+						<span v-else>
+							<span class="badge badge-warning">Assessed</span>
+						</span>
+					</span>
+				</div>
 				<div class="card-body">
 					<h6 class="card-subtitle mb-2 text-muted"> [[ getCurrentDoc().case_name ]] | [[ getCurrentDoc().id ]] </h6>
 					<p class="card-text" style="overflow-y=scroll">
-						<p v-html="getCurrentDoc().html" id="j-txt"></p>
+						<p v-html="getCurrentDocHtml()" id="j-txt"></p>
 					</p>
 					<div class="row">
 						<div class="col">
@@ -154,22 +166,33 @@
 <script type="text/javascript">
 	var topicId = {{ .Id }};
 	var relevanceLevels = ['not relevant', 'background', 'explanatory', 'on point'];
-	// var tagTypes = ['citation', 'quote', 'relevant']
-	// var addTypes = ['query', 'other'];
 
 	var vm = new Vue({
 		el: '#vm',
 		delimiters : ['[[', ']]'],
 		data: {
 			currentDoc: 0,
-			hits: [],
-			// numHits: 0,
-			tags: [],
+			doc: {
+				id: undefined,
+				case_name: undefined,
+				date_filed: undefined,
+				html: undefined,
+			},
+			hits: [{
+				id: undefined,
+				case_name: undefined,
+				assessed: undefined,
+				stored: undefined,
+			}],
+			tags: [{
+				docId: undefined,
+				start: undefined,
+				end: undefined,
+				text: undefined,
+			}],
 			rl: relevanceLevels,
 			queries: [],
 			query: "",
-			// ttypes: tagTypes,
-			// ttype: undefined,
 		},
 		computed: {
 				numHits: function() {
@@ -178,41 +201,49 @@
 		},
 
 		methods: {
-			getData: function() {
-				var vm = this
-				// // get topic data.
+			getTags: function() {
+				var self = this
 				var xhr = new XMLHttpRequest();
-				xhr.open('GET', '/data/' + topicId, true);
+				xhr.open('GET', '/tags/' + topicId + '/' + self.hits[self.currentDoc].id,  true);
 				xhr.send();
-				// console.log(xhr)
+				// console.log(xhr);
 				xhr.onreadystatechange = function () {
 					// console.log(xhr.readyState, xhr.status);
 					if (xhr.readyState === 4 && xhr.status === 200) {
 						var sres = JSON.parse(xhr.responseText);
-						vm.queries = sres.Queries
-						vm.hits = sres.Results
-						console.log(vm.hits);
-					} else if (xhr.readyState === 4 && xhr.status !== 200) {
-						window.alert('Something went wrong getting page data!')
-					}
-				};
-			},
-
-			getTags: function() {
-				var vm = this
-				var xhr = new XMLHttpRequest();
-				xhr.open('GET', '/tags/' + topicId + '/' + vm.hits[vm.currentDoc].id,  true);
-				xhr.send();
-				console.log(xhr)
-				xhr.onreadystatechange = function () {
-					console.log(xhr.readyState, xhr.status);
-					if (xhr.readyState === 4 && xhr.status === 200) {
-						var sres = JSON.parse(xhr.responseText);
-						vm.tags = sres
+						self.tags = sres
 					} else if (xhr.readyState === 4 && xhr.status !== 200) {
 						window.alert('Something went wrong getting tag data!')
 					}
 				};
+			},
+
+			getDoc: function() {
+				// $.get('/tdata/' + topicId + '/' + this.hits[this.currentDoc].id,
+				// function (response, status) {
+				// 	this.doc = response
+				// }.bind(this), "json");
+				// Stores to disk compared with above...
+				var xhr = new XMLHttpRequest();
+				xhr.open('GET', '/tdata/' + topicId + '/' + this.hits[this.currentDoc].id,  true);
+				xhr.send();
+				// console.log(xhr);
+				xhr.onreadystatechange = function () {
+					// console.log(xhr.readyState, xhr.status);
+					if (xhr.readyState === 4 && xhr.status === 200) {
+						var res = JSON.parse(xhr.responseText);
+						this.doc = res;
+						// update relevance status to check from db...
+						this.hits[this.currentDoc].stored = res.stored;
+						this.hits[this.currentDoc].relevance = res.relevance;
+					} else if (xhr.readyState === 4 && xhr.status !== 200) {
+						window.alert('Something went wrong getting tag data!')
+					}
+				}.bind(this);
+			},
+
+			getCurrentDocHtml: function() {
+				return this.doc.html
 			},
 
 			getCurrentDoc : function() {
@@ -221,26 +252,19 @@
 
 			changeDoc: function(i) {
 				this.currentDoc = i;
-				this.getTags();
 			},
 
 			nextDoc: function(event) {
-				if (this.assess()) {
-					this.currentDoc++;
-					if (this.currentDoc >= this.numHits) {
-						this.currentDoc = 0;
-					}
-					this.getTags();
+				this.currentDoc++;
+				if (this.currentDoc >= this.numHits) {
+					this.currentDoc = 0;
 				}
 			},
 
 			prevDoc: function(event) {
-				if (this.assess()) {
-					this.currentDoc--;
-					if (this.currentDoc < 0) {
-						this.currentDoc = this.numHits;
-					}
-					this.getTags();
+				this.currentDoc--;
+				if (this.currentDoc < 0) {
+					this.currentDoc = this.numHits;
 				}
 			},
 
@@ -253,7 +277,6 @@
 					xhr.send(JSON.stringify({'id': topicId, 'assessments':
 						[{'id': parseInt(h.id), 'relevance': h.relevance}]}));
 					xhr.onreadystatechange = function () {
-						// console.log(xhr.readyState, xhr.status);
 						if (xhr.readyState === 4 && xhr.status === 200) {
 							h.stored = true;
 							return true
@@ -330,10 +353,9 @@
 					'doc_id': parseInt(this.hits[this.currentDoc].id),
 					'start': start,
 					'end': end,
-					// 'type': type,
 				}));
 				xhr.onreadystatechange = function () {
-					console.log(xhr.readyState, xhr.status);
+					// console.log(xhr.readyState, xhr.status);
 					if (xhr.readyState === 4 && xhr.status !== 200) {
 						window.alert('Something went wrong submitting the tag with positions ' + start + ' ' + end + '. Please let me know.')
 					}
@@ -341,7 +363,11 @@
 			},
 
 			searchTopic: function() {
-				var vm = this
+				var vm = this;
+				var ids = [];
+				for (var i = 0; i < this.numHits; i++) {
+					ids.push(this.hits[i].id);
+				}
 				if (vm.query != "") {
 					vm.queries.push(vm.query);
 					var xhr = new XMLHttpRequest();
@@ -350,7 +376,8 @@
 					xhr.send(JSON.stringify({
 						'query': vm.query,
 						'topic': topicId,
-						'fields': ['id', 'case_name','date_filed', 'html']
+						'fields': ['id', 'case_name'],
+						'ids': ids,
 					}));
 					console.log(xhr);
 
@@ -372,15 +399,25 @@
 
 		watch : {
 			currentDoc: function() {
+				this.getDoc();
 				this.getTags();
+			},
+
+			tags : function() {
+				for (var i = 0; i < this.tags.length; i++) {
+					this.tags[i].text = this.hits[this.currentDoc].html.substring(this.tags[i].start,
+						this.tags[i].end);
+				}
 			}
 		},
-
 		created: function() {
-			this.getData();
-			// Fix tags not showing up on first page ...
-			this.getTags();
-		},
+			$.get('/data/' + topicId, function (response, status) {
+				this.queries = response.Queries;
+				this.hits = response.Results;
+				this.getDoc();
+				this.getTags();
+			}.bind(this), "json");
+		}
 	});
 </script>
 {{ end }}

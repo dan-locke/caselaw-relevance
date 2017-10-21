@@ -36,11 +36,11 @@ CREATE TABLE tag (
 
 type Tag struct {
 
-	TopicId int64 `json:"topic_id"`
+	TopicId int64 `json:"-"`
 
 	DocId int64 `json:"doc_id"`
 
-	UserId int64
+	UserId int64 `json:"-"`
 
 	Date time.Time
 
@@ -104,7 +104,7 @@ func dbGetTags(db *sql.DB, topicId, docId string, userId int64) ([]Tag, error) {
 	rows, err = db.Query("SELECT doc_id, date_added, start_pos, end_pos FROM tag WHERE topic_id = $1 AND doc_id = $2 AND tagger = $3",
 		topicId, docId, userId)
 	if err != nil {
-		return []Tag{}, err
+		return nil, err
 	}
 
 	defer rows.Close()

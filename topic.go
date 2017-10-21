@@ -147,7 +147,7 @@ func loadTopics(dir, path string, load, update bool) (*map[string]Topic, error) 
 }
 
 // TODO need to add here upper number to be assessed....
-func (i *Instance) getTopicList(user string) (TopicIndex, error) {
+func (i *Instance) getTopicList(user int64) (TopicIndex, error) {
 	l := TopicIndex{}
 
 	assessed, err := dbGetNumberAssessedPerTopic(i.db, user)

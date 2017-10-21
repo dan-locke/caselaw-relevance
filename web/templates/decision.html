@@ -1,5 +1,5 @@
 {{ define "title" }}
- {{ .Id}} - {{ .CaseName }}
+ Decision view
 {{ end }}
 
 {{ define "content" }}
@@ -7,9 +7,9 @@
 	<div class="row justify-content-start align-items-start">
 		<div class="col">
 			<div class="card">
-				<div class="card-header">[ getCurrentDoc().case_name ]</div>
+				<div class="card-header">[[ getCurrentDoc().case_name ]]</div>
 				<div class="card-body">
-					<h6 class="card-subtitle mb-2 text-muted">[ getCurrentDoc().id ] | [ getCurrentDoc().date_filed ]</h6>
+					<h6 class="card-subtitle mb-2 text-muted">[[ getCurrentDoc().id ]] | [[ getCurrentDoc().date_filed ]]</h6>
 					<p class="card-text" style="overflow-y=scroll">
 						<p v-html="getCurrentDoc().html"></p>
 					</p>
@@ -22,18 +22,26 @@
 
 {{ define "js" }}
 <script type="text/javascript">
-	var doc = {{ . }}
-
 	var vm = new Vue({
 		el: '#vm',
-		delimiters : ['[', ']'],
+		delimiters : ['[[', ']]'],
 		data: {
-			doc: doc
+			doc: {
+				id: undefined,
+				case_name: undefined,
+				date_filed: undefined,
+				html: undefined,
+			}
 		},
 		methods: {
 			getCurrentDoc: function() {
 				return this.doc
-			}
+			},
+		},
+		created: function() {
+			$.get('/ddata/' + document.location.pathname.split('/')[2], function (response, status) {
+				this.doc = response
+			}.bind(this), "json");
 		}
 	});
 </script>

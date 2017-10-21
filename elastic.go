@@ -17,6 +17,10 @@ type Decision struct {
 
 	Html string `json:"html"`
 
+	Relevance string `json:"relevance"`
+
+	Stored bool `json:"stored"`
+
 	// PlainText string `json:"plain_text"`
 }
 

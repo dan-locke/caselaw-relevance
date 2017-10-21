@@ -93,25 +93,44 @@ func decisionViewHandler(i *Instance, w http.ResponseWriter, r *http.Request) (i
 	}
 	if auth < 0 {
 		http.Redirect(w, r, "/login", 302)
-		// return 401, errors.New("Unauthorized")
 	}
 	vars := mux.Vars(r)
 	docId, ok := vars["docId"]; if !ok {
-		http.NotFound(w, r)
+		return 400, nil
 	}
-	log.Printf("user %d - handling citation -", auth, docId)
+	log.Printf("user %d - handling decision - %s", auth, docId)
+
+	i.templates["decision"].Execute(w, nil)
+	return 200, nil
+}
+
+func decisionHandler(i *Instance, w http.ResponseWriter, r *http.Request) (int, error) {
+	auth, err := i.authed(r)
+	if err != nil {
+		return 500, err
+	}
+	if auth < 0 {
+		http.Redirect(w, r, "/login", 302)
+	}
+	vars := mux.Vars(r)
+	docId, ok := vars["docId"]; if !ok {
+		return 400, nil
+	}
+	log.Printf("user %d - handling decision data - %s", auth, docId)
 
 	getRes, err := i.es.Get(i.searchIndex, i.docType, docId)
 	if err != nil {
-		// http.NotFound(w, r)
 		return 500, err
 	}
 	api, err := elasticGetToApiResponse(getRes)
 	if err != nil {
-		// http.NotFound(w, r)
 		return 500, err
 	}
-	i.templates["decision"].Execute(w, api)
+	buff, err := json.Marshal(api)
+	if err != nil {
+		return 500, err
+	}
+	w.Write(buff)
 	return 200, nil
 }
 
@@ -140,13 +159,13 @@ func topicIndexDataHandler(i *Instance, w http.ResponseWriter, r *http.Request) 
 	}
 	log.Printf("user %d - handling topic index data.", auth)
 
-	list, err := i.getTopicList("1")
+	list, err := i.getTopicList(auth)
 	if err != nil {
-		return 400, err
+		return 500, err
 	}
 	buff, err := json.Marshal(list)
 	if err != nil {
-		return 400, err
+		return 500, err
 	}
 	w.Write(buff)
 	return 200, nil
@@ -173,6 +192,50 @@ func topicViewHandler(i *Instance, w http.ResponseWriter, r *http.Request) (int,
 	return 200, nil
 }
 
+func topicDecisionHandler(i *Instance, w http.ResponseWriter, r *http.Request) (int, error) {
+	auth, err := i.authed(r)
+	if err != nil {
+		return 500, err
+	}
+	if auth < 0 {
+		http.Redirect(w, r, "/login", 302)
+	}
+	vars := mux.Vars(r)
+	docId, ok := vars["docId"]; if !ok {
+		return 400, nil
+	}
+	topicId, ok := vars["topicId"]; if !ok {
+		return 400, nil
+	}
+	log.Printf("user %d - requested decision data for topic - %s", auth, topicId)
+
+	getRes, err := i.es.Get(i.searchIndex, i.docType, docId)
+	if err != nil {
+		return 500, err
+	}
+	api, err := elasticGetToApiResponse(getRes)
+	if err != nil {
+		return 500, err
+	}
+	assessed, err := dbGetAssessedPerTopic(i.db, auth, topicId)
+	if err != nil {
+		return 500, err
+	}
+
+	api.Stored = false
+	if a, ok := assessed[docId]; ok {
+		api.Relevance = a
+		api.Stored = true
+	}
+
+	buff, err := json.Marshal(api)
+	if err != nil {
+		return 500, err
+	}
+	w.Write(buff)
+	return 200, nil
+}
+
 func topicDataHandler(i *Instance, w http.ResponseWriter, r *http.Request) (int, error) {
 	auth, err := i.authed(r)
 	if err != nil {
@@ -195,14 +258,22 @@ func topicDataHandler(i *Instance, w http.ResponseWriter, r *http.Request) (int,
 		queries = append(queries, createTextQuery(s))
 	}
 
-	hits, err := i.elasticTopicQueryHits(queries)
+	qry, err := dbGetUserQueries(i.db, topicId, auth)
 	if err != nil {
-		return 400, err
+		return 500, err
+	}
+	for q := range qry {
+		queries = append(queries, makeEsMatch(qry[q]))
 	}
 
-	assessed, err := dbGetAssessedPerTopic(i.db, "1", topic.Id)
+	hits, err := i.elasticTopicQueryHits(queries)
 	if err != nil {
-		return 400, err
+		return 500, err
+	}
+
+	assessed, err := dbGetAssessedPerTopic(i.db, auth, topicId)
+	if err != nil {
+		return 500, err
 	}
 
 	for j := range hits {
@@ -213,14 +284,18 @@ func topicDataHandler(i *Instance, w http.ResponseWriter, r *http.Request) (int,
 		}
 	}
 
+	queryString := []string{}
+	queryString = append(queryString, topic.Query...)
+	queryString = append(queryString, qry...)
+
 	t := TopicData {
-		Queries: topic.Query,
+		Queries: queryString,
 		Results: hits,
 	}
 
 	buff, err := json.Marshal(t)
 	if err != nil {
-		return 400, err
+		return 500, err
 	}
 	w.Write(buff)
 	return 200, nil
