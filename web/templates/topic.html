@@ -172,6 +172,7 @@
 		delimiters : ['[[', ']]'],
 		data: {
 			currentDoc: 0,
+			prevDoc: 0,
 			doc: {
 				id: undefined,
 				case_name: undefined,
@@ -234,8 +235,9 @@
 						var res = JSON.parse(xhr.responseText);
 						this.doc = res;
 						// update relevance status to check from db...
-						this.hits[this.currentDoc].stored = res.stored;
-						this.hits[this.currentDoc].relevance = res.relevance;
+						if (!this.hits[this.currentDoc].stored) {
+							this.hits[this.currentDoc].relevance = res.relevance;
+						}
 					} else if (xhr.readyState === 4 && xhr.status !== 200) {
 						window.alert('Something went wrong getting tag data!')
 					}
@@ -251,10 +253,12 @@
 			},
 
 			changeDoc: function(i) {
+				this.prevDoc = this.currentDoc
 				this.currentDoc = i;
 			},
 
 			nextDoc: function(event) {
+				this.prevDoc = this.currentDoc
 				this.currentDoc++;
 				if (this.currentDoc >= this.numHits) {
 					this.currentDoc = 0;
@@ -262,6 +266,7 @@
 			},
 
 			prevDoc: function(event) {
+				this.prevDoc = this.currentDoc
 				this.currentDoc--;
 				if (this.currentDoc < 0) {
 					this.currentDoc = this.numHits;
@@ -269,7 +274,7 @@
 			},
 
 			assess: function() {
-				var h = this.hits[this.currentDoc];
+				var h = this.hits[this.prevDoc];
 				if (h.relevance != undefined) {
 					var xhr = new XMLHttpRequest();
 					xhr.open('POST', '/assess');
@@ -296,7 +301,7 @@
 				var req = [];
 				for (var i = 0; i < this.hits.length; i++) {
 					var h = this.hits[i];
-					if (!h.stored) {
+					if (!h.stored && (h.relevance != undefined || h.relevance != '')) {
 						req.push({'id': parseInt(h.id), 'relevance': h.relevance})
 					}
 				}
@@ -399,6 +404,7 @@
 
 		watch : {
 			currentDoc: function() {
+				this.assess();
 				this.getDoc();
 				this.getTags();
 			},

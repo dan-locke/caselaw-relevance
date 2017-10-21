@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"log"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -51,6 +52,11 @@ func apiSearch(i *Instance, w http.ResponseWriter, r *http.Request) (int, error)
 		return 500, err
 	}
 
+	docList := map[string]int{}
+	for j := range req.Id {
+		docList[req.Id[j]] = 0
+	}
+
 	qry, err := lexes.ParseJson(req.Query, "plain_text",
 		req.Fields, true, false)
 	if err != nil {
@@ -64,10 +70,19 @@ func apiSearch(i *Instance, w http.ResponseWriter, r *http.Request) (int, error)
 	}
 
 	log.Printf("user %d - search - %s.\n", auth, req.Query)
-	res, err := i.elasticSearchResponse(qry)
+	res, err := i.elasticSearchResponse(auth, strconv.FormatInt(req.TopicId, 10), qry)
 	if err != nil {
 		return 500, err
 	}
+	ret := []ApiCaseResponse{}
+	// Exclude existing docIds from new results ...
+	for j := range res {
+		if _, ok := docList[res[j].Id]; !ok {
+			docList[res[j].Id] = 0
+			ret = append(ret, res[j])
+		}
+	}
+
 	wr, err := json.Marshal(res)
 	if err != nil {
 		return 500, err
@@ -102,18 +117,17 @@ func dbGetUserQueries(db *sql.DB, topic string, user int64) ([]string, error) {
 	return queries, nil
 }
 
-func (i *Instance) elasticSearchResponse(query []byte) ([]ApiCaseResponse, error) {
+func (i *Instance) elasticSearchResponse(userId int64, topicId string, query []byte) ([]ApiCaseResponse, error) {
 	esRes, err := i.es.Search(i.searchIndex, query)
 	if err != nil {
 		return nil, err
 	}
-	api, err := elasticSearchToApiCaseResponse(esRes)
+	api, err := i.elasticSearchToApiCaseResponse(userId, topicId, esRes)
 	return api, err
 }
 
-func (i *Instance) elasticHits(queries []string) ([]ApiCaseResponse, error) {
+func (i *Instance) elasticHits(userId int64, topicId string, queries []string) ([]ApiCaseResponse, error) {
 	res := make([]ApiCaseResponse, 0)
-	seenId := map[string]bool{}
 	for q := range queries {
 		qry, err := lexes.ParseJson(queries[q], "plain_text", []string{"case_name", "date_filed", "id", "html"}, true, true)
 		if err != nil {
@@ -125,24 +139,17 @@ func (i *Instance) elasticHits(queries []string) ([]ApiCaseResponse, error) {
 			return nil, err
 		}
 
-		api, err := elasticSearchToApiCaseResponse(esRes)
+		api, err := i.elasticSearchToApiCaseResponse(userId, topicId, esRes)
 		if err != nil {
 			return nil, err
 		}
-
-		for j := range api {
-			if _, ok := seenId[api[j].Id]; !ok {
-				res = append(res, api[j])
-			}
-			seenId[api[j].Id] = true
-		}
+		res = append(res, api...)
 	}
 	return res, nil
 }
 
-func (i *Instance) elasticTopicQueryHits(queries []map[string]interface{}) ([]ApiCaseResponse, error) {
+func (i *Instance) elasticTopicQueryHits(userId int64, topicId string, queries []map[string]interface{}) ([]ApiCaseResponse, error) {
 	res := make([]ApiCaseResponse, 0)
-	seenId := map[string]bool{}
 	for _, q := range queries {
 		q["_source"] = []string{"id", "case_name"}
 		q["from"] = 0
@@ -156,17 +163,11 @@ func (i *Instance) elasticTopicQueryHits(queries []map[string]interface{}) ([]Ap
 			return nil, err
 		}
 
-		api, err := elasticSearchToApiCaseResponse(esRes)
+		api, err := i.elasticSearchToApiCaseResponse(userId, topicId, esRes)
 		if err != nil {
 			return nil, err
 		}
-
-		for j := range api {
-			if _, ok := seenId[api[j].Id]; !ok {
-				res = append(res, api[j])
-			}
-			seenId[api[j].Id] = true
-		}
+		res = append(res, api...)
 	}
 	return res, nil
 }

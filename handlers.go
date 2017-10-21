@@ -266,7 +266,7 @@ func topicDataHandler(i *Instance, w http.ResponseWriter, r *http.Request) (int,
 		queries = append(queries, makeEsMatch(qry[q]))
 	}
 
-	hits, err := i.elasticTopicQueryHits(queries)
+	hits, err := i.elasticTopicQueryHits(auth, topicId, queries)
 	if err != nil {
 		return 500, err
 	}

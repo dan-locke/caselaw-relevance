@@ -24,16 +24,6 @@ type Decision struct {
 	// PlainText string `json:"plain_text"`
 }
 
-// type ApiQueryResponse struct {
-//
-// 	Query string `json:"query"`
-//
-// 	TotalHits int64 `json:"total"`
-//
-// 	Hits []ApiCaseResponse `json:"hits"`
-//
-// }
-
 type ApiCaseResponse struct {
 
 	Score float64 `json:"score"`
@@ -95,21 +85,39 @@ func elasticGetToApiResponse(s *elastic.GetResponse) (*ApiGetResponse, error) {
 	return &r, nil
 }
 
-func elasticSearchToApiCaseResponse(s *elastic.SearchResponse) ([]ApiCaseResponse, error) {
-	res := make([]ApiCaseResponse, len(s.Hits.Hits))
-	for i := range s.Hits.Hits {
-		hit, err := parseDecisionFromMap(s.Hits.Hits[i].Source.(map[string]interface{}))
+func (i *Instance) elasticSearchToApiCaseResponse(userId int64, topicId string, s *elastic.SearchResponse) ([]ApiCaseResponse, error) {
+	res := make([]ApiCaseResponse, 0)
+	seenId := map[string]bool{}
+
+	assessed, err := dbGetAssessedPerTopic(i.db, userId, topicId)
+	if err != nil {
+		return nil, err
+	}
+
+
+	for j := range s.Hits.Hits {
+		hit, err := parseDecisionFromMap(s.Hits.Hits[j].Source.(map[string]interface{}))
 		if err != nil {
 			return nil, err
 		}
-		res[i] = ApiCaseResponse {
-			Score : s.Hits.Hits[i].Score,
-			Id : s.Hits.Hits[i].Id,
-			CaseName : hit.CaseName,
-			DateFiled : hit.DateFiled,
-			Html : hit.Html,
-			// Excerpt : s.Hits.Hits[i].Highlights.Highlight,
+		stored := false
+		relevance := ""
+		if k, ok := assessed[s.Hits.Hits[j].Id]; ok {
+			relevance = k
+			stored = true
 		}
+		if _, ok := seenId[s.Hits.Hits[j].Id]; !ok {
+			res = append(res, ApiCaseResponse {
+				Score : s.Hits.Hits[j].Score,
+				Id : s.Hits.Hits[j].Id,
+				CaseName : hit.CaseName,
+				DateFiled : hit.DateFiled,
+				Html : hit.Html,
+				Stored: stored,
+				Relevance: relevance,
+			})
+		}
+		seenId[s.Hits.Hits[j].Id] = true
 	}
 	return res, nil
 }
