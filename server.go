@@ -3,9 +3,11 @@ package main
 import (
 	// "crypto/rand"
 	"database/sql"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"html/template"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -17,8 +19,62 @@ import (
 	elastic "elastic-go"
 )
 
-const STATIC_FILE_DIR string = "/static/"
-const STATIC_FILE_LOC string = "./web/static"
+const CONFIG_PATH string = "config.json"
+
+type Config struct {
+
+	Database struct {
+
+		Collection string `json:"collection"`
+
+		Host       string `json:"host"`
+
+		Port       string `json:"port"`
+
+		Pass       string `json:"pass"`
+
+		User       string `json:"user"`
+
+	} `json:"database"`
+
+	Elastic struct {
+
+		DocType   string `json:"doc_type"`
+
+		IndexName string `json:"index_name"`
+
+	} `json:"elastic"`
+
+	Server struct {
+
+		Address             string    `json:"address"`
+
+		StaticFileDirectory string `json:"static_file_directory"`
+
+		StaticFileLocation  string `json:"static_file_location"`
+
+		Templates           struct {
+
+			BaseLayout      string `json:"base_layout"`
+
+			Directory       string `json:"directory"`
+
+			LayoutDirectory string `json:"layout_directory"`
+
+		} `json:"templates"`
+
+	} `json:"serve"`
+
+	Topics struct {
+
+		DataFileName string `json:"data_file_name"`
+
+		Location     string `json:"location"`
+
+	} `json:"topics"`
+
+}
+
 
 type Instance struct {
 
@@ -39,6 +95,8 @@ type Instance struct {
 	templates map[string]*template.Template
 
 	store *sessions.CookieStore
+
+	config Config
 
 }
 
@@ -67,7 +125,12 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func initInstance() (*Instance, error) {
-	db, err := initDatabase(dbConfig{"postgres", "1234", "ussc_caselaw", "localhost", "5432"})
+	c, err := loadConfig()
+	if err != nil {
+		return nil, err
+	}
+	db, err := initDatabase(dbConfig{c.Database.User, c.Database.Pass,
+		c.Database.Collection, c.Database.Host, c.Database.Port})
 	if err != nil {
 		return nil, err
 	}
@@ -94,17 +157,26 @@ func initInstance() (*Instance, error) {
 		db: db,
 		es: es,
 		startTime: time.Now(),
-		searchIndex: "ussc",
-		docType: "decision",
+		searchIndex: c.Elastic.IndexName,
+		docType: c.Elastic.DocType,
 		topics: nil,
 		templates: make(map[string]*template.Template),
 		store: sessions.NewCookieStore(key),
+		config: *c,
 	}, nil
 }
 
-func loadConfig() error {
-	// TODO ...
-	return nil
+func loadConfig() (*Config, error) {
+	var c Config
+	f, err := ioutil.ReadFile(CONFIG_PATH)
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(f, &c)
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
 }
 
 func (i *Instance) router() *mux.Router {
@@ -144,18 +216,17 @@ func (i *Instance) router() *mux.Router {
 	// gets.Handle("/citation", handler{i, apiTagCitations})
 
 	// Serve static files
-	gets.PathPrefix(STATIC_FILE_DIR).Handler(http.StripPrefix(STATIC_FILE_DIR,
-		http.FileServer(http.Dir(STATIC_FILE_LOC))))
+	// gets.PathPrefix(STATIC_FILE_DIR).Handler(http.StripPrefix(STATIC_FILE_DIR,
+	// 	http.FileServer(http.Dir(STATIC_FILE_LOC))))
+
+	gets.PathPrefix(i.config.Server.StaticFileDirectory).Handler(
+		http.StripPrefix(i.config.Server.StaticFileDirectory,
+		http.FileServer(http.Dir(i.config.Server.StaticFileLocation))))
 
 	return r
 }
 
 func main() {
-	// confLocation := flag.String("c", "", "Path to config file")
-	loadTopic := flag.Bool("l", false, "Load stored topics")
-	topicLocation := flag.String("t", "", "Path to topic files")
-	updateTopics := flag.Bool("u", false, "Update stored topics")
-	flag.Parse()
 
 	fmt.Println(
 `====================================
@@ -169,7 +240,12 @@ Search classifier
 		log.Panic(err)
 	}
 
-	topics, err := loadTopics(instance.dir, *topicLocation, *loadTopic, *updateTopics)
+	loadTopic := flag.Bool("l", false, "Load stored topics")
+	updateTopics := flag.Bool("u", false, "Update stored topics")
+	flag.Parse()
+
+	topics, err := loadTopics(instance.dir, instance.config.Topics.Location,
+		instance.config.Topics.DataFileName, *loadTopic, *updateTopics)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -181,7 +257,9 @@ Search classifier
 	// }
 	// log.Println("topics results loaded.")
 
-	templates, err := loadTemplates(instance.dir)
+	templates, err := loadTemplates(instance.config.Server.Templates.BaseLayout,
+		instance.config.Server.Templates.LayoutDirectory,
+		instance.config.Server.Templates.Directory, instance.dir)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -192,7 +270,7 @@ Search classifier
 	r := instance.router()
 	srv := &http.Server{
 		Handler: r,
-		Addr: ":8080",
+		Addr: instance.config.Server.Address,
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 	}

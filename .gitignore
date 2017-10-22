@@ -3,3 +3,4 @@ caselaw-relevance
 config.json
 topic/*
 topic.dat
+web/static/*

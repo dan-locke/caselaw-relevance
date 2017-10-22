@@ -57,9 +57,7 @@ type TopicIndex []struct {
 
 }
 
-const TOPIC_DAT string = "topic.dat"
-
-func saveTopics(t map[string]Topic) error {
+func saveTopics(fileName string, t map[string]Topic) error {
 	var buff bytes.Buffer
 	enc := gob.NewEncoder(&buff)
 
@@ -69,11 +67,11 @@ func saveTopics(t map[string]Topic) error {
 		return err
 	}
 
-	return ioutil.WriteFile(TOPIC_DAT, buff.Bytes(), 0664)
+	return ioutil.WriteFile(fileName, buff.Bytes(), 0664)
 }
 
-func loadFromDatFile() (*map[string]Topic, error) {
-	data, err := ioutil.ReadFile(TOPIC_DAT)
+func loadFromDatFile(fileName string) (*map[string]Topic, error) {
+	data, err := ioutil.ReadFile(fileName)
 	if err != nil {
 		log.Panic(err)
 		return nil, err
@@ -119,11 +117,11 @@ func loadfromFolder(dir, path string) (*map[string]Topic, error) {
 	return &topics, err
 }
 
-func loadTopics(dir, path string, load, update bool) (*map[string]Topic, error) {
+func loadTopics(dir, path, fileName string, load, update bool) (*map[string]Topic, error) {
 	gob.Register(map[string]interface{}{})
 	gob.Register([]interface{}{})
 	if load {
-		m, err := loadFromDatFile()
+		m, err := loadFromDatFile(fileName)
 		if os.IsNotExist(err) {
 			update = true
 		} else {
@@ -140,7 +138,7 @@ func loadTopics(dir, path string, load, update bool) (*map[string]Topic, error) 
 		if err != nil {
 			return nil, err
 		}
-		err = saveTopics(*m)
+		err = saveTopics(fileName, *m)
 		return m, err
 	}
 	return nil, nil
@@ -169,5 +167,5 @@ func (i *Instance) getTopic(topic string) Topic {
 func (i *Instance) updateTopic(topic string, t Topic) error {
 	i.topics[topic] = t
 	// lazy approach, easier to resave whole file
-	return saveTopics(i.topics)
+	return saveTopics(i.config.Topics.DataFileName, i.topics)
 }
