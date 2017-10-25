@@ -184,6 +184,7 @@ func (i *Instance) router() *mux.Router {
 
 	gets := r.Methods("GET").Subrouter()
 	posts := r.Methods("POST").Subrouter()
+	deletes := r.Methods("DELETE").Subrouter()
 
 	// Views -------------------------------------------------------------------
 	gets.Handle("/login", handler{i, loginViewHandler})
@@ -205,19 +206,13 @@ func (i *Instance) router() *mux.Router {
 	// Database functions ------------------------------------------------------
 	gets.Handle("/tags/{topicId}/{docId}", handler{i, getTagHandler})
 	posts.Handle("/tag", handler{i, apiSaveTag})
+	deletes.Handle("/tag", handler{i, apiDeleteTag})
 
 	 // Searching functions ----------------------------------------------------
 	posts.Handle("/search", handler{i, apiSearch})
 
 	// Asesssments  ------------------------------------------------------------
 	posts.Handle("/assess", handler{i, apiAssessTopic})
-
-	// Add for auto annotate citations
-	// gets.Handle("/citation", handler{i, apiTagCitations})
-
-	// Serve static files
-	// gets.PathPrefix(STATIC_FILE_DIR).Handler(http.StripPrefix(STATIC_FILE_DIR,
-	// 	http.FileServer(http.Dir(STATIC_FILE_LOC))))
 
 	gets.PathPrefix(i.config.Server.StaticFileDirectory).Handler(
 		http.StripPrefix(i.config.Server.StaticFileDirectory,

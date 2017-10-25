@@ -15,6 +15,8 @@ CREATE TYPE assessType AS ENUM('not relevant', 'background', 'explanatory', 'on 
 
 CREATE TABLE tag (
 
+	tag_id SERIAL UNIQUE,
+
 	topic_id bigint,
 
 	doc_id bigint,
@@ -26,6 +28,14 @@ CREATE TABLE tag (
 	start_pos bigint NOT NULL,
 
 	end_pos bigint NOT NULL,
+
+	start_offset bigint NOT NULL,
+
+	end_offset bigint NOT NULL,
+
+	start_container VARCHAR NOT NULL,
+
+	end_container VARCHAR NOT NULL,
 
 	PRIMARY KEY (topic_id, doc_id, tagger, date_added),
 

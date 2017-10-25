@@ -6,7 +6,7 @@
 <div class="container" id="vm">
 	<div class="row justify-content-start align-items-start">
 		<div class="col-5">
-			<div class="card">
+			<div class="card" style="max-height: 90vh;">
 				<div class="card-header">
 					<ul id="card-nav" class="nav nav-tabs card-header-tabs" role="tablist">
 						<li class="nav-item">
@@ -24,7 +24,7 @@
 						</li>
 					</ul>
 				</div>
-				<div id="card-nav-content" class="card-body tab-content">
+				<div id="card-nav-content" class="card-body tab-content" style=" overflow: scroll;">
 					<div role="tabpanel" class="tab-pane fade show active" id="topic" aria-labelledby="topic-tab">
 						<h6 class="card-subtitle mb-2 text-muted">{{ .CaseTitle }} | {{ .CaseId }}</h6>
 						<p class="card-text">
@@ -57,27 +57,17 @@
 								<li class="list-group-item border-right-0 border-left-0 border-bottom-0">{{ .CitingParagraph }}</li>
 							</ul>
 						</p>
-						<button class="btn btn-primary" v-on:click="submit">Submit</button>
 					</div>
 					<div role="tabpanel" class="tab-pane fade" id="tags" aria-labelledby="tag-tab">
 						<h6 class="card-subtitle mb-2 text-muted">Current tags</h6>
 						<p class="card-text" id="seltxt">
 							<ul class="list-group border-right-0 border-left-0">
 								<li class="list-group-item  border-right-0 border-left-0" v-for="tag in tags">
-									[[ tag.start ]] - [[ tag.end ]] | [[ tag.text ]]
-									<span class="badge badge-primary">relevant</span>
+									[[ tag.start ]] - [[ tag.end ]] | [[ tag.id ]] | [[ tag.text ]]
+									<button type="button" class="btn btn-sm btn-warning" v-on:click="deleteTag(tag.id)">Delete</button>
 								</li>
 							</ul>
 						</p>
-						<!-- <div class="row">
-							<div class="form-inline">
-								<label class="mr-sm-2" for="ttype-sel">Tag type</label>
-								<select class="custom-select mb-2 mr-sm-2 mb-sm-0" id="ttype-sel">
-									<option disabled value="">Select</option>
-									<option v-for="t in ttypes">[ t ]</option>
-								</select>
-							</div>
-						</div> -->
 						<button type="button" class="btn btn-primary" v-on:click="getSelection">Tag</button>
 					</div>
 					<div role="tabpanel" class="tab-pane fade" id="docs" aria-labelledby="docs-tab">
@@ -121,11 +111,14 @@
 						</p>
 					</div>
 				</div>
+				<div class="card-footer">
+					<button class="btn btn-primary" v-on:click="submit">Submit all</button>
+				</div>
 			</div>
 		</div>
 		<div class="col-7">
-			<div class="card">
-				<div class="card-header">Assessing [[ currentDoc + 1 ]] of [[ numHits ]]
+			<div class="card" style="max-height: 90vh;">
+				<div class="card-header">[[ getCurrentDoc().case_name ]] | [[ getCurrentDoc().id ]]
 					<span v-if="getCurrentDoc().relevance === '' || getCurrentDoc().relevance === undefined">
 						<span class="badge badge-danger">Not assessed</span>
 					</span>
@@ -138,11 +131,12 @@
 						</span>
 					</span>
 				</div>
-				<div class="card-body">
-					<h6 class="card-subtitle mb-2 text-muted"> [[ getCurrentDoc().case_name ]] | [[ getCurrentDoc().id ]] </h6>
-					<p class="card-text" style="overflow-y=scroll">
+				<div class="card-body" style="overflow: scroll;">
+					<p class="card-text">
 						<p v-html="getCurrentDocHtml()" id="j-txt"></p>
 					</p>
+				</div>
+				<div class="card-footer">
 					<div class="row">
 						<div class="col">
 							<button class="btn btn-secondary" v-on:click="prevDoc">Previous</button>
@@ -185,12 +179,7 @@
 				assessed: undefined,
 				stored: undefined,
 			}],
-			tags: [{
-				docId: undefined,
-				start: undefined,
-				end: undefined,
-				text: undefined,
-			}],
+			tags: [],
 			rl: relevanceLevels,
 			queries: [],
 			query: "",
@@ -316,53 +305,81 @@
 				};
 			},
 
-			// taken from https://stackoverflow.com/questions/
-			// 33544010/how-to-get-highlighted-text-positions-using-jquery
 			getSelection: function() {
+				var vm = this
+
 				var el = document.getElementById("j-txt");
-				var start = 0, end = 0;
-				var sel, range, priorRange;
-				// var type = 'citation';
-				// this.tagType = undefined;
-				if (typeof window.getSelection != "undefined") {
-					range = window.getSelection().getRangeAt(0);
-					priorRange = range.cloneRange();
-					console.log(priorRange)
-					priorRange.selectNodeContents(el);
-					priorRange.setEnd(range.startContainer, range.startOffset);
-					start = priorRange.toString().length;
-					end = start + range.toString().length;
-				} else if (typeof document.selection != "undefined" &&
-				(sel = document.selection).type != "Control") {
-					range = sel.createRange();
-					priorRange = document.body.createTextRange();
-					priorRange.moveToElementText(el);
-					priorRange.setEndPoint("EndToStart", range);
-					start = priorRange.text.length;
-					end = start + range.text.length;
+				var sel = window.getSelection();
+				var r = sel.getRangeAt(0);
+
+				// This is probably not very efficient. It works by finding the
+				// position of the start of the text within the html, then
+				// adding the offset for both start and end container to get the
+				// absolute index positions.
+				var sContainerText = r.startContainer.textContent;
+				var eContainerText = r.endContainer.textContent;
+
+				var nodes = [r.startContainer.textContent, r.endContainer.textContent];
+				var ind = [];
+				var pos = [];
+
+				for (var i = 0; i < 2; i++) {
+					var txt = nodes[i];
+					if (nodes[i].includes("&")) {
+						txt = nodes[i].replace(/&/g, '&amp;');
+					}
+					ind.push(vm.doc.html.indexOf(txt));
+					if (i == 0) {
+						pos.push(ind[i] + r.startOffset);
+					} else {
+						pos.push(ind[i] + r.endOffset);
+					}
 				}
 
-				this.tags.push({
-					docId: this.hits[this.currentDoc].id,
-					start: start,
-					end: end,
-					text: this.hits[this.currentDoc].html.substring(start, end),
-					// type: type,
-				})
+				if (ind[0] >= 0 && ind[1] >= 0) {
+					// var text = vm.doc.html.substring(pos[0], pos[1]);
+					var tag = {
+						'topic_id': topicId,
+						'doc_id': parseInt(vm.doc.id),
+						'start': pos[0],
+						'end': pos[1],
+						'start_offset': r.startOffset,
+						'end_offset': r.endOffset,
+						'start_container': nodes[0],
+						'end_container': nodes[1],
+					}
 
+					var xhr = new XMLHttpRequest();
+					xhr.open('POST', '/tag');
+					xhr.setRequestHeader('Content-Type', 'application/json');
+					xhr.send(JSON.stringify(tag));
+					xhr.onreadystatechange = function () {
+						if (xhr.readyState === 4 && xhr.status !== 200) {
+							window.alert('Something went wrong submitting the tag with positions ' + start + ' ' + end + '. Please let me know.')
+						} else if (xhr.readyState === 4 && xhr.status === 200) {
+							var res = JSON.parse(xhr.responseText);
+							tag.text = sel.toString();
+							tag.id = res.id;
+							vm.tags.push(tag)
+						}
+					};
+				} else {
+					window.alert('Something went wrong with getting your tag positions. Please keep a note of the page and take a screenshot of your tag, and let me know.')
+				}
+			},
+
+			deleteTag: function(id) {
+				var vm = this
 				var xhr = new XMLHttpRequest();
-				xhr.open('POST', '/tag');
+				xhr.open('DELETE', '/tag');
 				xhr.setRequestHeader('Content-Type', 'application/json');
-				xhr.send(JSON.stringify({
-					'topic_id': topicId,
-					'doc_id': parseInt(this.hits[this.currentDoc].id),
-					'start': start,
-					'end': end,
-				}));
+				xhr.send(JSON.stringify({'id': id}));
 				xhr.onreadystatechange = function () {
-					// console.log(xhr.readyState, xhr.status);
 					if (xhr.readyState === 4 && xhr.status !== 200) {
-						window.alert('Something went wrong submitting the tag with positions ' + start + ' ' + end + '. Please let me know.')
+						window.alert('Something went wrong deleting the tag. Please let me know.')
+					} else if (xhr.readyState === 4 && xhr.status === 200) {
+						var ind = vm.tags.findIndex(i => i.id === id);
+						vm.tags.splice(ind);
 					}
 				};
 			},
@@ -409,12 +426,12 @@
 				this.getTags();
 			},
 
-			tags : function() {
-				for (var i = 0; i < this.tags.length; i++) {
-					this.tags[i].text = this.hits[this.currentDoc].html.substring(this.tags[i].start,
-						this.tags[i].end);
-				}
-			}
+			// tags : function() {
+			// 	for (var i = 0; i < this.tags.length; i++) {
+			// 		this.tags[i].text = this.doc.html.substring(this.tags[i].start,
+			// 			this.tags[i].end);
+			// 	}
+			// }
 		},
 		created: function() {
 			$.get('/data/' + topicId, function (response, status) {
