@@ -13,13 +13,13 @@ type Decision struct {
 
 	CaseName string `json:"case_name"`
 
-	DateFiled string `json:"date_filed"`
+	DateFiled string `json:"date_filed,omitempty"`
 
-	Html string `json:"html"`
+	Html string `json:"html,omitempty"`
 
-	Relevance string `json:"relevance"`
+	Relevance string `json:"relevance,omitempty"`
 
-	Stored bool `json:"stored"`
+	Stored bool `json:"stored,omitempty"`
 
 	// PlainText string `json:"plain_text"`
 }
@@ -32,9 +32,9 @@ type ApiCaseResponse struct {
 
 	CaseName string `json:"case_name"`
 
-	DateFiled string `json:"date_filed"`
+	DateFiled string `json:"date_filed,omitempty"`
 
-	Html string `json:"html"`
+	Html string `json:"html,omitempty"`
 
 	Relevance string `json:"relevance"`
 

@@ -214,9 +214,9 @@ func (i *Instance) router() *mux.Router {
 	// Asesssments  ------------------------------------------------------------
 	posts.Handle("/assess", handler{i, apiAssessTopic})
 
-	gets.PathPrefix(i.config.Server.StaticFileDirectory).Handler(
-		http.StripPrefix(i.config.Server.StaticFileDirectory,
-		http.FileServer(http.Dir(i.config.Server.StaticFileLocation))))
+	gets.PathPrefix(i.config.Server.StaticFileLocation).Handler(
+		http.StripPrefix(i.config.Server.StaticFileLocation,
+		http.FileServer(http.Dir(i.config.Server.StaticFileDirectory))))
 
 	return r
 }
@@ -246,11 +246,11 @@ Search classifier
 	}
 	log.Println("topics loaded.")
 	instance.topics = *topics
-	// err = instance.getNumResultsForManualQueries()
-	// if err != nil {
-	// 	log.Panic(err)
-	// }
-	// log.Println("topics results loaded.")
+	// // err = instance.getNumResultsForManualQueries()
+	// // if err != nil {
+	// // 	log.Panic(err)
+	// // }
+	// // log.Println("topics results loaded.")
 
 	templates, err := loadTemplates(instance.config.Server.Templates.BaseLayout,
 		instance.config.Server.Templates.LayoutDirectory,

@@ -36,10 +36,7 @@ func loginHandler(i *Instance, w http.ResponseWriter, r *http.Request) (int, err
 
 	redirectTarget := "/login"
 
-	if id < 1 {
-		http.Redirect(w, r, redirectTarget, 302)
-		// return 200, nil
-	} else {
+	if id > 0 {
 		session, err := i.store.Get(r, "assess")
 		if err != nil {
 			return 500, err

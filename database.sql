@@ -37,6 +37,10 @@ CREATE TABLE tag (
 
 	end_container VARCHAR NOT NULL,
 
+	start_id INT NOT NULL,
+
+	end_id INT NOT NULL,
+
 	PRIMARY KEY (topic_id, doc_id, tagger, date_added),
 
 	FOREIGN KEY (tagger) REFERENCES users (user_id)

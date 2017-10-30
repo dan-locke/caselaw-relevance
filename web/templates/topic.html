@@ -63,8 +63,8 @@
 						<p class="card-text" id="seltxt">
 							<ul class="list-group border-right-0 border-left-0">
 								<li class="list-group-item  border-right-0 border-left-0" v-for="tag in tags">
-									[[ tag.start ]] - [[ tag.end ]] | [[ tag.id ]] | [[ tag.text ]]
-									<button type="button" class="btn btn-sm btn-warning" v-on:click="deleteTag(tag.id)">Delete</button>
+									[[ tag.start ]] - [[ tag.end ]] | [[ tag.tag_id ]] | [[ tag.text ]]
+									<button type="button" class="btn btn-sm btn-warning" v-on:click="deleteTag(tag.tag_id)">Delete</button>
 								</li>
 							</ul>
 						</p>
@@ -191,10 +191,20 @@
 		},
 
 		methods: {
+
+			addIds: function() {
+				var id = 0;
+				var e = document.getElementById("j-txt").getElementsByTagName("*");
+				for (var i = 0; i < e.length; i++) {
+					e[i].id = "j-"+id;
+					id++;
+				}
+			},
+
 			getTags: function() {
 				var self = this
 				var xhr = new XMLHttpRequest();
-				xhr.open('GET', '/tags/' + topicId + '/' + self.hits[self.currentDoc].id,  true);
+				xhr.open('GET', '/tags/' + topicId + '/' + this.hits[this.currentDoc].id,  true);
 				xhr.send();
 				// console.log(xhr);
 				xhr.onreadystatechange = function () {
@@ -227,6 +237,10 @@
 						if (!this.hits[this.currentDoc].stored) {
 							this.hits[this.currentDoc].relevance = res.relevance;
 						}
+						this.$nextTick(function() {
+							this.addIds();
+							this.getTags();
+						});
 					} else if (xhr.readyState === 4 && xhr.status !== 200) {
 						window.alert('Something went wrong getting tag data!')
 					}
@@ -308,9 +322,11 @@
 			getSelection: function() {
 				var vm = this
 
-				var el = document.getElementById("j-txt");
+				var el = document.getElementById('j-txt');
 				var sel = window.getSelection();
 				var r = sel.getRangeAt(0);
+				console.log(sel);
+				console.log(r)
 
 				// This is probably not very efficient. It works by finding the
 				// position of the start of the text within the html, then
@@ -322,6 +338,7 @@
 				var nodes = [r.startContainer.textContent, r.endContainer.textContent];
 				var ind = [];
 				var pos = [];
+
 
 				for (var i = 0; i < 2; i++) {
 					var txt = nodes[i];
@@ -347,6 +364,8 @@
 						'end_offset': r.endOffset,
 						'start_container': nodes[0],
 						'end_container': nodes[1],
+						'start_id': parseInt(r.startContainer.parentNode.id.replace('j-','')),
+						'end_id': parseInt(r.endContainer.parentNode.id.replace('j-','')),
 					}
 
 					var xhr = new XMLHttpRequest();
@@ -359,7 +378,8 @@
 						} else if (xhr.readyState === 4 && xhr.status === 200) {
 							var res = JSON.parse(xhr.responseText);
 							tag.text = sel.toString();
-							tag.id = res.id;
+							tag.tag_id = res.id;
+							tag.calc = true
 							vm.tags.push(tag)
 						}
 					};
@@ -426,19 +446,48 @@
 				this.getTags();
 			},
 
-			// tags : function() {
-			// 	for (var i = 0; i < this.tags.length; i++) {
-			// 		this.tags[i].text = this.doc.html.substring(this.tags[i].start,
-			// 			this.tags[i].end);
-			// 	}
-			// }
+			tags : function() {
+				var vm = this
+				console.log(vm.tags)
+				console.log(vm.tags.length)
+				for (var i = 0; i < vm.tags.length; i++) {
+					var tag = vm.tags[i];
+					console.log(tag);
+					if (!vm.tags[i].calc) {
+						var containers = [];
+						for (var j = 0; j < 2; j++) {
+							var el, cont;
+							if (j == 0) {
+								el = document.getElementById("j-"+tag.start_id);
+								cont = tag.start_container;
+							} else {
+								el = document.getElementById("j-"+tag.end_id);
+								cont = tag.end_container;
+							}
+							for (var k = 0; k < el.childNodes.length; k++) {
+								if ((el.childNodes[k].nodeType == 3) &&
+									(el.childNodes[k].textContent == cont)) {
+										containers.push(el.childNodes[k])
+								}
+							}
+						}
+						console.log(containers);
+						var r = document.createRange();
+						r.setStart(containers[0], tag.start_offset);
+						r.setEnd(containers[1], tag.end_offset);
+						console.log(r)
+						this.tags[i].text = r.cloneContents().textContent;
+						console.log(r.cloneContents().textContent)
+						vm.tags[i].calc = true
+					}
+				}
+			}
 		},
 		created: function() {
 			$.get('/data/' + topicId, function (response, status) {
 				this.queries = response.Queries;
 				this.hits = response.Results;
 				this.getDoc();
-				this.getTags();
 			}.bind(this), "json");
 		}
 	});
