@@ -139,7 +139,7 @@
 				<div class="card-footer">
 					<div class="row">
 						<div class="col">
-							<button class="btn btn-secondary" v-on:click="prevDoc">Previous</button>
+							<button class="btn btn-secondary" v-on:click="previousDoc">Previous</button>
 							<button class="btn btn-secondary" v-on:click="nextDoc">Next</button>
 						</div>
 						<div class="form-inline">
@@ -160,6 +160,57 @@
 <script type="text/javascript">
 	var topicId = {{ .Id }};
 	var relevanceLevels = ['not relevant', 'background', 'explanatory', 'on point'];
+
+	function highlight(range) {
+		if (range.startContainer == range.endContainer) {
+			var frag = range.extractContents();
+			var n = document.createElement('span');
+			n.setAttribute('style', 'background-color: #FFCCCC;');
+			n.appendChild(frag);
+			range.insertNode(n);
+		} else {
+			// console.log("Todo highlightings...")
+			var p = range.commonAncestorContainer;
+			console.log(p);
+			var e = p.lastChild;
+			var cont = true;
+			while (cont) {
+				console.log("e -", e);
+				if (range.intersectsNode(e) && (e.id == "" || e.id == undefined)) {
+					console.log("here", e)
+					var n = document.createElement('span');
+					n.setAttribute('style', 'background-color: #FFCCCC;');
+					var nr = document.createRange();
+					var start, end;
+					if (e == range.startContainer) {
+						// console.log("As")
+						start = range.startOffset;
+						end = e.textContent.length;
+						// console.log(e, e.textContent, range.startOffset, e.textContent.length)
+						cont = false;
+					} else if (e == range.endContainer) {
+						// console.log("Bs")
+						start = 0;
+						end = range.endOffset;
+					} else {
+						// console.log("Cs")
+						start = 0;
+						end = e.textContent.length;
+					}
+					nr.setStart(e, start);
+					nr.setEnd(e, end);
+					var f = nr.extractContents();
+					n.appendChild(f);
+					nr.insertNode(n);
+				}
+				if (e.previousSibling) {
+					e = e.previousSibling;
+				} else {
+					break;
+				}
+			}
+		}
+	};
 
 	var vm = new Vue({
 		el: '#vm',
@@ -268,7 +319,7 @@
 				}
 			},
 
-			prevDoc: function(event) {
+			previousDoc: function(event) {
 				this.prevDoc = this.currentDoc
 				this.currentDoc--;
 				if (this.currentDoc < 0) {
@@ -339,11 +390,47 @@
 				var ind = [];
 				var pos = [];
 
-
 				for (var i = 0; i < 2; i++) {
 					var txt = nodes[i];
-					if (nodes[i].includes("&")) {
-						txt = nodes[i].replace(/&/g, '&amp;');
+					var id = (i == 0) ? r.startContainer.parentElement.id : r.endContainer.parentElement.id;
+					var el = document.getElementById(id);
+					var text = "";
+					var newInd = 0;
+					if (i == 0) {
+						var cont = true;
+						// console.log("Common container -", r.commonAncestorContainer)
+						var c = r.commonAncestorContainer.lastChild;
+						while (cont) {
+							// console.log("At parent node -", c);
+							if (r.intersectsNode(c) && (c.nodeType == 3 || c.id == "")) {
+								text = c.textContent + text;
+							} else {
+								txt = text;
+								break;
+							}
+							if (c.previousSibling || (c.previousSibling == null && c == r.startContainer.firstChild)) {
+								c = c.previousSibling;
+							} else {
+								break;
+							}
+						}
+					} else {
+						var c = r.commonAncestorContainer.firstChild;
+						// console.log("At parent node -", c);
+						while (c.nextSibling) {
+							if (r.intersectsNode(c) && (c.nodeType == 3 || c.id == "")) {
+								text = c.textContent + text;
+							} else {
+								txt = text;
+								break;
+							}
+						}
+					}
+					for (var k = 0; k < el.childNodes.length; k++) {
+
+					}
+					if (txt.includes("&")) {
+						txt = txt.replace(/&/g, '&amp;');
 					}
 					ind.push(vm.doc.html.indexOf(txt));
 					if (i == 0) {
@@ -367,6 +454,7 @@
 						'start_id': parseInt(r.startContainer.parentNode.id.replace('j-','')),
 						'end_id': parseInt(r.endContainer.parentNode.id.replace('j-','')),
 					}
+					// highlight(r);
 
 					var xhr = new XMLHttpRequest();
 					xhr.open('POST', '/tag');
@@ -374,7 +462,9 @@
 					xhr.send(JSON.stringify(tag));
 					xhr.onreadystatechange = function () {
 						if (xhr.readyState === 4 && xhr.status !== 200) {
-							window.alert('Something went wrong submitting the tag with positions ' + start + ' ' + end + '. Please let me know.')
+							window.alert('Something went wrong submitting the' +
+								'tag with positions ' + start + ' ' + end +
+								'. Please let me know.')
 						} else if (xhr.readyState === 4 && xhr.status === 200) {
 							var res = JSON.parse(xhr.responseText);
 							tag.text = sel.toString();
@@ -384,7 +474,9 @@
 						}
 					};
 				} else {
-					window.alert('Something went wrong with getting your tag positions. Please keep a note of the page and take a screenshot of your tag, and let me know.')
+					window.alert('Something went wrong with getting your tag' +
+						'positions. Please keep a note of the page and take a' +
+						'screenshot of your tag, and let me know.')
 				}
 			},
 
@@ -448,38 +540,80 @@
 
 			tags : function() {
 				var vm = this
-				console.log(vm.tags)
-				console.log(vm.tags.length)
+				// console.log(vm.tags)
+				// console.log(vm.tags.length)
 				for (var i = 0; i < vm.tags.length; i++) {
 					var tag = vm.tags[i];
 					console.log(tag);
-					if (!vm.tags[i].calc) {
-						var containers = [];
-						for (var j = 0; j < 2; j++) {
-							var el, cont;
-							if (j == 0) {
-								el = document.getElementById("j-"+tag.start_id);
-								cont = tag.start_container;
+					// if (!vm.tags[i].calc) {
+					var containers = [];
+					var newInds = [];
+					for (var j = 0; j < 2; j++) {
+						var el, cont;
+						if (j == 0) {
+							el = document.getElementById("j-"+tag.start_id);
+							cont = tag.start_container;
+						} else {
+							el = document.getElementById("j-"+tag.end_id);
+							cont = tag.end_container;
+						}
+						console.log("child nodes", el.childNodes);
+						for (var k = 0; k < el.childNodes.length; k++) {
+							// Somewhat working old version...
+							// if ((el.childNodes[k].nodeType == 3) && (el.childNodes[k].textContent == cont)) {
+							// 	console.log('matched')
+							// 	containers.push(el.childNodes[k])
+							// 	break;
+							// }
+
+							// id == "" is an inserted node ...
+							// we keep a running tab of the text encountered
+							// between text nodes and spans until we reach
+							// another element because inserting spans means we
+							// can't find the original element merely by
+							// its text as the doms change ...
+							var text = "";
+							var newInd = 0;
+							if (el.childNodes[k].nodeType == 3 || (el.childNodes[k].id == "" || el.id == undefined)) {
+								console.log(el.childNodes[k])
+								text += el.childNodes[k].textContent;
 							} else {
-								el = document.getElementById("j-"+tag.end_id);
-								cont = tag.end_container;
+								text = '';
 							}
-							for (var k = 0; k < el.childNodes.length; k++) {
-								if ((el.childNodes[k].nodeType == 3) &&
-									(el.childNodes[k].textContent == cont)) {
-										containers.push(el.childNodes[k])
+							console.log("Text -", text, el.childNodes[k].textContent.length);
+							if (text == cont) {
+								console.log('matched')
+								if (j == 0) {
+									newInd = tag.start_offset - newInd;
+								} else {
+									newInd = tag.end_offset - newInd;
 								}
+								console.log(newInd, tag.start_offset)
+								newInds.push(newInd);
+								containers.push(el.childNodes[k]);
+								if (el.childNodes[k].nodeType == 3 || el.childNodes[k].id == "") {
+									newInd += el.childNodes[k].textContent.length;
+								}
+								break;
+							}
+							// I need to do this again after to add the index ...
+							if (el.childNodes[k].nodeType == 3 || el.childNodes[k].id == "") {
+								newInd += el.childNodes[k].textContent.length;
 							}
 						}
-						console.log(containers);
-						var r = document.createRange();
-						r.setStart(containers[0], tag.start_offset);
-						r.setEnd(containers[1], tag.end_offset);
-						console.log(r)
-						this.tags[i].text = r.cloneContents().textContent;
-						console.log(r.cloneContents().textContent)
-						vm.tags[i].calc = true
 					}
+					// console.log(tag)
+					console.log("Containers", containers);
+					console.log("New Inds", newInds, tag.start_offset, tag.end_offset);
+					var r = document.createRange();
+					r.setStart(containers[0], newInds[0]);
+					r.setEnd(containers[1], newInds[1]);
+					console.log(r)
+					this.tags[i].text = r.cloneContents().textContent;
+					highlight(r);
+					// console.log(r.cloneContents().textContent)
+					vm.tags[i].calc = true
+					// }
 				}
 			}
 		},
