@@ -73,9 +73,16 @@
 					<div role="tabpanel" class="tab-pane fade" id="docs" aria-labelledby="docs-tab">
 						<h6 class="card-subtitle mb-2 text-muted">Documents</h6>
 						<p class="card-text" id="seltxt">
+							Assessing [[ currentDoc + 1 ]] of [[ numHits ]].
+							<br>
 							<ul class="list-group border-right-0 border-left-0">
-								<li class="list-group-item  border-right-0 border-left-0" v-for="(doc, i) in hits">
-									<a href="#" v-on:click="changeDoc(i)">[[ doc.case_name ]]</a>
+								<li class="list-group-item  border-right-0 border-left-0" v-for="doc in pageData">
+									<a href="#" v-on:click="changeDoc(doc.id)">
+										<span v-if="doc.id == getCurrentDocId()">
+											<span class="badge badge-primary">Assessing</span>
+										</span>
+										[[ doc.case_name ]]
+									</a>
 									<span v-if="doc.relevance === '' || doc.relevance === undefined">
 										<span class="badge badge-danger">Not assessed</span>
 									</span>
@@ -88,6 +95,18 @@
 										</span>
 									</span>
 								</li>
+								<br>
+								<ul v-if="numHits > perPage" class="pagination text-center">
+									<li class="page-item" v-bind:class="{disabled : getPage() == 0}">
+										<a class="page-link" href="#" aria-label="Previous" v-on:click="prevPage">Previous</a>
+									</li>
+									<li v-for="p in visPages" class="page-item">
+										<a class="page-link" href="#" v-on:click="changePage(p)">[[ p + 1 ]]</a>
+									</li>
+									<li class="page-item" v-bind:class="{disabled : getPage() >= numPages}">
+										<a class="page-link" href="#" aria-label="Next" v-on:click="nextPage">Next</a>
+									</li>
+								</ul>
 							</ul>
 						</p>
 					</div>
@@ -168,48 +187,79 @@
 			n.setAttribute('style', 'background-color: #FFCCCC;');
 			n.appendChild(frag);
 			range.insertNode(n);
-		} else {
-			// console.log("Todo highlightings...")
+		} else if (range.commonAncestorContainer.nodeType != 3) {
 			var p = range.commonAncestorContainer;
-			console.log(p);
-			var e = p.lastChild;
-			var cont = true;
-			while (cont) {
-				console.log("e -", e);
-				if (range.intersectsNode(e) && (e.id == "" || e.id == undefined)) {
-					console.log("here", e)
-					var n = document.createElement('span');
-					n.setAttribute('style', 'background-color: #FFCCCC;');
-					var nr = document.createRange();
-					var start, end;
-					if (e == range.startContainer) {
-						// console.log("As")
-						start = range.startOffset;
-						end = e.textContent.length;
-						// console.log(e, e.textContent, range.startOffset, e.textContent.length)
-						cont = false;
-					} else if (e == range.endContainer) {
-						// console.log("Bs")
-						start = 0;
-						end = range.endOffset;
-					} else {
-						// console.log("Cs")
-						start = 0;
-						end = e.textContent.length;
-					}
-					nr.setStart(e, start);
-					nr.setEnd(e, end);
-					var f = nr.extractContents();
-					n.appendChild(f);
-					nr.insertNode(n);
-				}
-				if (e.previousSibling) {
-					e = e.previousSibling;
-				} else {
-					break;
-				}
-			}
+			// console.log(p);
+			highlightPart(range, p.lastChild);
 		}
+	};
+
+	function highlightPart(range, e) {
+		while (e.previousSibling) {
+			// general node in middle
+			if (range.intersectsNode(e) && !e.contains(range.startContainer) && !e.contains(range.endContainer) && e != range.startContainer && e != range.endContainer) {
+				console.log("highlight part whole node", e, range.startContainer, range.endContainer)
+				highlightNode(e);
+			// start or end of range node
+			} else if (e.contains(range.startContainer) || e.contains(range.endContainer) || e == range.startContainer || e == range.endContainer) {
+				var cont = true;
+				if (e.childNodes.length != 0) {
+					console.log("highlight part going deeper", e, e.childNodes)
+					cont = highlightPart(range, e.lastChild);
+				} else {
+					cont = highlightDeep(range, e);
+
+				}
+				console.log("highlight return deep val", cont);
+				// if (!cont) {
+				// 	break;
+				// }
+			}
+			e = e.previousSibling;
+		}
+	};
+
+	function highlightNode(e) {
+		var n = document.createElement('span');
+		n.setAttribute('style', 'background-color: #FFCCCC;');
+		var nr = document.createRange();
+		nr.setStartBefore(e);
+		nr.setEndAfter(e);
+		var f = nr.extractContents();
+		n.appendChild(f);
+		nr.insertNode(n);
+	};
+
+	function highlightDeep(range, e) {
+		var cont = true;
+		if (range.intersectsNode(e) && (e.id == "" || e.id == undefined)) {
+			// console.log("here", e)
+			var n = document.createElement('span');
+			n.setAttribute('style', 'background-color: #FFCCCC;');
+			var nr = document.createRange();
+			var start, end;
+			if (e == range.startContainer) {
+				// console.log("As")
+				start = range.startOffset;
+				end = e.textContent.length;
+				// console.log(e, e.textContent, range.startOffset, e.textContent.length)
+				cont = false;
+			} else if (e == range.endContainer) {
+				// console.log("Bs")
+				start = 0;
+				end = range.endOffset;
+			} else {
+				// console.log("Cs")
+				start = 0;
+				end = e.textContent.length;
+			}
+			nr.setStart(e, start);
+			nr.setEnd(e, end);
+			var f = nr.extractContents();
+			n.appendChild(f);
+			nr.insertNode(n);
+		}
+		return cont;
 	};
 
 	var vm = new Vue({
@@ -234,14 +284,60 @@
 			rl: relevanceLevels,
 			queries: [],
 			query: "",
+			page: 0,
+			perPage: 5,
+			pageNumVis: 5,
+			pageData: [],
 		},
 		computed: {
 				numHits: function() {
 					return this.hits.length;
-				}
+				},
+				numPages: function() {
+					return Math.ceil(this.numHits / this.perPage);
+				},
+				visPages: function() {
+					var maxVis  = this.page + this.pageNumVis;
+					var max = this.numPages >= (maxVis) ? maxVis : this.numPages;
+					var ret = [];
+					for (var i = this.page; i < max; i++) {
+						ret.push(i);
+					}
+					console.log(max, ret)
+					return ret;
+				},
 		},
 
 		methods: {
+			getPage: function() {
+				return this.page;
+			},
+
+			nextPage: function(event) {
+				this.page++;
+				if (this.page >= this.numPages) {
+					this.page = 0;
+				}
+			},
+
+			prevPage: function(event) {
+				this.page--;
+				if (this.page < 0) {
+					this.page = this.numPages;
+				}
+			},
+
+			changePage: function(i) {
+				this.page = i;
+			},
+
+			slicePageData: function() {
+				var startPage = this.page * this.perPage;
+				var endPage = startPage + this.perPage;
+				var end = endPage >= this.numHits ? this.numHits : endPage;
+				this.pageData = this.hits.slice(startPage, end);
+				console.log(this.pageData);
+			},
 
 			addIds: function() {
 				var id = 0;
@@ -306,9 +402,14 @@
 				return this.hits[this.currentDoc];
 			},
 
-			changeDoc: function(i) {
+			getCurrentDocId: function() {
+				return this.hits[this.currentDoc].id;
+			},
+
+			changeDoc: function(id) {
+				var ind = vm.hits.findIndex(i => i.id === id);
 				this.prevDoc = this.currentDoc
-				this.currentDoc = i;
+				this.currentDoc = ind;
 			},
 
 			nextDoc: function(event) {
@@ -376,8 +477,8 @@
 				var el = document.getElementById('j-txt');
 				var sel = window.getSelection();
 				var r = sel.getRangeAt(0);
-				console.log(sel);
-				console.log(r)
+				// console.log(sel);
+				console.log("Get selection range -", r)
 
 				// This is probably not very efficient. It works by finding the
 				// position of the start of the text within the html, then
@@ -393,41 +494,37 @@
 				for (var i = 0; i < 2; i++) {
 					var txt = nodes[i];
 					var id = (i == 0) ? r.startContainer.parentElement.id : r.endContainer.parentElement.id;
+					console.log("Get selection id -", id);
 					var el = document.getElementById(id);
 					var text = "";
 					var newInd = 0;
 					if (i == 0) {
-						var cont = true;
-						// console.log("Common container -", r.commonAncestorContainer)
-						var c = r.commonAncestorContainer.lastChild;
-						while (cont) {
-							// console.log("At parent node -", c);
+						console.log("Get selection Common container -", r.commonAncestorContainer)
+						var c = r.commonAncestorContainer.lastChild || r.commonAncestorContainer;
+						while (c.previousSibling) {
+							console.log("Get selection ancestor container or last child", c);
 							if (r.intersectsNode(c) && (c.nodeType == 3 || c.id == "")) {
 								text = c.textContent + text;
 							} else {
 								txt = text;
 								break;
 							}
-							if (c.previousSibling || (c.previousSibling == null && c == r.startContainer.firstChild)) {
-								c = c.previousSibling;
-							} else {
-								break;
-							}
+							c = c.previousSibling;
 						}
 					} else {
-						var c = r.commonAncestorContainer.firstChild;
-						// console.log("At parent node -", c);
+						var c = r.commonAncestorContainer.firstChild || r.commonAncestorContainer;
+						console.log("Get selection child or ancestor -", c);
 						while (c.nextSibling) {
+							console.log("Get selection while loop child or ancestor -", c);
 							if (r.intersectsNode(c) && (c.nodeType == 3 || c.id == "")) {
-								text = c.textContent + text;
+								// console.log("Get selection text problem-", c.textContent)
+								text = text + c.textContent;
 							} else {
 								txt = text;
 								break;
 							}
+							c = c.nextSibling
 						}
-					}
-					for (var k = 0; k < el.childNodes.length; k++) {
-
 					}
 					if (txt.includes("&")) {
 						txt = txt.replace(/&/g, '&amp;');
@@ -441,7 +538,6 @@
 				}
 
 				if (ind[0] >= 0 && ind[1] >= 0) {
-					// var text = vm.doc.html.substring(pos[0], pos[1]);
 					var tag = {
 						'topic_id': topicId,
 						'doc_id': parseInt(vm.doc.id),
@@ -454,7 +550,6 @@
 						'start_id': parseInt(r.startContainer.parentNode.id.replace('j-','')),
 						'end_id': parseInt(r.endContainer.parentNode.id.replace('j-','')),
 					}
-					// highlight(r);
 
 					var xhr = new XMLHttpRequest();
 					xhr.open('POST', '/tag');
@@ -532,6 +627,10 @@
 		},
 
 		watch : {
+			page: function() {
+				this.slicePageData();
+			},
+
 			currentDoc: function() {
 				this.assess();
 				this.getDoc();
@@ -540,80 +639,76 @@
 
 			tags : function() {
 				var vm = this
-				// console.log(vm.tags)
-				// console.log(vm.tags.length)
+				console.log("Tags list -", vm.tags)
 				for (var i = 0; i < vm.tags.length; i++) {
 					var tag = vm.tags[i];
-					console.log(tag);
-					// if (!vm.tags[i].calc) {
-					var containers = [];
-					var newInds = [];
-					for (var j = 0; j < 2; j++) {
-						var el, cont;
-						if (j == 0) {
-							el = document.getElementById("j-"+tag.start_id);
-							cont = tag.start_container;
-						} else {
-							el = document.getElementById("j-"+tag.end_id);
-							cont = tag.end_container;
-						}
-						console.log("child nodes", el.childNodes);
-						for (var k = 0; k < el.childNodes.length; k++) {
-							// Somewhat working old version...
-							// if ((el.childNodes[k].nodeType == 3) && (el.childNodes[k].textContent == cont)) {
-							// 	console.log('matched')
-							// 	containers.push(el.childNodes[k])
-							// 	break;
-							// }
-
-							// id == "" is an inserted node ...
-							// we keep a running tab of the text encountered
-							// between text nodes and spans until we reach
-							// another element because inserting spans means we
-							// can't find the original element merely by
-							// its text as the doms change ...
-							var text = "";
-							var newInd = 0;
-							if (el.childNodes[k].nodeType == 3 || (el.childNodes[k].id == "" || el.id == undefined)) {
-								console.log(el.childNodes[k])
-								text += el.childNodes[k].textContent;
+					console.log("Tags tag -", tag);
+					if (!vm.tags[i].calc) {
+						var containers = [];
+						var newInds = [];
+						for (var j = 0; j < 2; j++) {
+							var el, cont;
+							if (j == 0) {
+								el = document.getElementById("j-"+tag.start_id);
+								cont = tag.start_container;
 							} else {
-								text = '';
+								el = document.getElementById("j-"+tag.end_id);
+								cont = tag.end_container;
 							}
-							console.log("Text -", text, el.childNodes[k].textContent.length);
-							if (text == cont) {
-								console.log('matched')
-								if (j == 0) {
-									newInd = tag.start_offset - newInd;
+							console.log("Tags iteration " + i + " element -", el);
+							console.log("Tags element child nodes", el.childNodes);
+							for (var k = 0; k < el.childNodes.length; k++) {
+								// Somewhat working old version...
+								// if ((el.childNodes[k].nodeType == 3) && (el.childNodes[k].textContent == cont)) {
+								// 	console.log('matched')
+								// 	containers.push(el.childNodes[k])
+								// 	break;
+								// }
+
+								// id == "" is an inserted node ...
+								// we keep a running tab of the text encountered
+								// between text nodes and spans until we reach
+								// another element because inserting spans means we
+								// can't find the original element merely by
+								// its text as the doms change ...
+								var text = "";
+								var newInd = 0;
+								if (el.childNodes[k].nodeType == 3 || (el.childNodes[k].id == "" || el.id == undefined)) {
+									// console.log(el.childNodes[k])
+									text += el.childNodes[k].textContent;
 								} else {
-									newInd = tag.end_offset - newInd;
+									text = '';
 								}
-								console.log(newInd, tag.start_offset)
-								newInds.push(newInd);
-								containers.push(el.childNodes[k]);
+								// console.log("Text -", text, el.childNodes[k].textContent.length);
+								if (text == cont) {
+									// console.log('matched', text, el.childNodes[k])
+									if (j == 0) {
+										newInd = tag.start_offset - newInd;
+									} else {
+										newInd = tag.end_offset - newInd;
+									}
+									newInds.push(newInd);
+									containers.push(el.childNodes[k]);
+									if (el.childNodes[k].nodeType == 3 || el.childNodes[k].id == "") {
+										newInd += el.childNodes[k].textContent.length;
+									}
+									break;
+								}
+								// I need to do this again after to add the index ...
 								if (el.childNodes[k].nodeType == 3 || el.childNodes[k].id == "") {
 									newInd += el.childNodes[k].textContent.length;
 								}
-								break;
-							}
-							// I need to do this again after to add the index ...
-							if (el.childNodes[k].nodeType == 3 || el.childNodes[k].id == "") {
-								newInd += el.childNodes[k].textContent.length;
 							}
 						}
+						console.log("Tags containers", containers);
+						console.log("Tags new inds", newInds, tag.start_offset, tag.end_offset);
+						var r = document.createRange();
+						r.setStart(containers[0], newInds[0]);
+						r.setEnd(containers[1], newInds[1]);
+						this.tags[i].text = r.cloneContents().textContent;
+						highlight(r);
+						vm.tags[i].calc = true
 					}
-					// console.log(tag)
-					console.log("Containers", containers);
-					console.log("New Inds", newInds, tag.start_offset, tag.end_offset);
-					var r = document.createRange();
-					r.setStart(containers[0], newInds[0]);
-					r.setEnd(containers[1], newInds[1]);
-					console.log(r)
-					this.tags[i].text = r.cloneContents().textContent;
-					highlight(r);
-					// console.log(r.cloneContents().textContent)
-					vm.tags[i].calc = true
-					// }
 				}
 			}
 		},
@@ -621,6 +716,7 @@
 			$.get('/data/' + topicId, function (response, status) {
 				this.queries = response.Queries;
 				this.hits = response.Results;
+				this.slicePageData();
 				this.getDoc();
 			}.bind(this), "json");
 		}
