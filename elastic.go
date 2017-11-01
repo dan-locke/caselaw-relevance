@@ -87,7 +87,6 @@ func elasticGetToApiResponse(s *elastic.GetResponse) (*ApiGetResponse, error) {
 
 func (i *Instance) elasticSearchToApiCaseResponse(userId int64, topicId string, s *elastic.SearchResponse) ([]ApiCaseResponse, error) {
 	res := make([]ApiCaseResponse, 0)
-	seenId := map[string]bool{}
 
 	assessed, err := dbGetAssessedPerTopic(i.db, userId, topicId)
 	if err != nil {
@@ -106,18 +105,15 @@ func (i *Instance) elasticSearchToApiCaseResponse(userId int64, topicId string, 
 			relevance = k
 			stored = true
 		}
-		if _, ok := seenId[s.Hits.Hits[j].Id]; !ok {
-			res = append(res, ApiCaseResponse {
-				Score : s.Hits.Hits[j].Score,
-				Id : s.Hits.Hits[j].Id,
-				CaseName : hit.CaseName,
-				DateFiled : hit.DateFiled,
-				Html : hit.Html,
-				Stored: stored,
-				Relevance: relevance,
-			})
-		}
-		seenId[s.Hits.Hits[j].Id] = true
+		res = append(res, ApiCaseResponse {
+			Score : s.Hits.Hits[j].Score,
+			Id : s.Hits.Hits[j].Id,
+			CaseName : hit.CaseName,
+			DateFiled : hit.DateFiled,
+			Html : hit.Html,
+			Stored: stored,
+			Relevance: relevance,
+		})
 	}
 	return res, nil
 }

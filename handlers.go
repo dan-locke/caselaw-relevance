@@ -268,18 +268,18 @@ func topicDataHandler(i *Instance, w http.ResponseWriter, r *http.Request) (int,
 		return 500, err
 	}
 
-	assessed, err := dbGetAssessedPerTopic(i.db, auth, topicId)
-	if err != nil {
-		return 500, err
-	}
-
-	for j := range hits {
-		hits[j].Stored = false
-		if k, ok := assessed[hits[j].Id]; ok {
-			hits[j].Relevance = k
-			hits[j].Stored = true
-		}
-	}
+	// assessed, err := dbGetAssessedPerTopic(i.db, auth, topicId)
+	// if err != nil {
+	// 	return 500, err
+	// }
+	//
+	// for j := range hits {
+	// 	hits[j].Stored = false
+	// 	if k, ok := assessed[hits[j].Id]; ok {
+	// 		hits[j].Relevance = k
+	// 		hits[j].Stored = true
+	// 	}
+	// }
 
 	queryString := []string{}
 	queryString = append(queryString, topic.Query...)

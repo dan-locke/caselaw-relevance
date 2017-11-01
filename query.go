@@ -150,6 +150,7 @@ func (i *Instance) elasticHits(userId int64, topicId string, queries []string) (
 
 func (i *Instance) elasticTopicQueryHits(userId int64, topicId string, queries []map[string]interface{}) ([]ApiCaseResponse, error) {
 	res := make([]ApiCaseResponse, 0)
+	seenId := map[string]int{}
 	for _, q := range queries {
 		q["_source"] = []string{"id", "case_name"}
 		q["from"] = 0
@@ -167,7 +168,12 @@ func (i *Instance) elasticTopicQueryHits(userId int64, topicId string, queries [
 		if err != nil {
 			return nil, err
 		}
-		res = append(res, api...)
+		for j := range api {
+			if _, ok := seenId[api[j].Id]; !ok {
+				res = append(res, api[j])
+			}
+			seenId[api[j].Id] = 0
+		}
 	}
 	return res, nil
 }
