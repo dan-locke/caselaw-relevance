@@ -63,7 +63,7 @@
 						<p class="card-text" id="seltxt">
 							<ul class="list-group border-right-0 border-left-0">
 								<li class="list-group-item  border-right-0 border-left-0" v-for="tag in tags">
-									[[ tag.start ]] - [[ tag.end ]] | [[ tag.tag_id ]] | [[ tag.text ]]
+									[[ tag.text ]]
 									<button type="button" class="btn btn-sm btn-warning" v-on:click="deleteTag(tag.tag_id)">Delete</button>
 								</li>
 							</ul>
@@ -189,41 +189,48 @@
 			range.insertNode(n);
 		} else if (range.commonAncestorContainer.nodeType != 3) {
 			var p = range.commonAncestorContainer;
-			// console.log(p);
+			console.log("Highlight common ancestor-", p);
 			highlightPart(range, p.lastChild);
 		}
 	};
 
 	function highlightPart(range, e) {
-		while (e.previousSibling) {
-			// general node in middle
-			if (range.intersectsNode(e) && !e.contains(range.startContainer) && !e.contains(range.endContainer) && e != range.startContainer && e != range.endContainer) {
-				console.log("highlight part whole node", e, range.startContainer, range.endContainer)
+		var cont = true;
+		console.log("highlight part e -", e)
+		while (true) {
+			// general node in middle   && e != range.startContainer && e != range.endContainer
+			if (range.intersectsNode(e) && !e.contains(range.startContainer) && !e.contains(range.endContainer)) {
+				console.log("highlight part whole node", e)
 				highlightNode(e);
-			// start or end of range node
-			} else if (e.contains(range.startContainer) || e.contains(range.endContainer) || e == range.startContainer || e == range.endContainer) {
-				var cont = true;
+			// start or end of range node || e == range.startContainer || e == range.endContainer
+			} else if (e.contains(range.startContainer) || e.contains(range.endContainer)) {
 				if (e.childNodes.length != 0) {
 					console.log("highlight part going deeper", e, e.childNodes)
 					cont = highlightPart(range, e.lastChild);
 				} else {
 					cont = highlightDeep(range, e);
-
+					console.log("highlight return deep val", cont);
 				}
-				console.log("highlight return deep val", cont);
-				// if (!cont) {
-				// 	break;
-				// }
+				console.log("highlight return val", cont);
+				if (!cont) {
+					return cont;
+				}
+			}
+			console.log("highlight part end value of e-", e)
+			console.log("highlight part end value of e.previousSibling", e.previousSibling)
+			if (e.previousSibling == null) {
+				break;
 			}
 			e = e.previousSibling;
 		}
+		return cont;
 	};
 
 	function highlightNode(e) {
 		var n = document.createElement('span');
 		n.setAttribute('style', 'background-color: #FFCCCC;');
 		var nr = document.createRange();
-		nr.setStartBefore(e);
+		nr.setStartAfter(e);
 		nr.setEndAfter(e);
 		var f = nr.extractContents();
 		n.appendChild(f);
@@ -639,10 +646,10 @@
 
 			tags : function() {
 				var vm = this
-				console.log("Tags list -", vm.tags)
+				// console.log("Tags list -", vm.tags)
 				for (var i = 0; i < vm.tags.length; i++) {
 					var tag = vm.tags[i];
-					console.log("Tags tag -", tag);
+					// console.log("Tags tag -", tag);
 					if (!vm.tags[i].calc) {
 						var containers = [];
 						var newInds = [];
@@ -655,8 +662,8 @@
 								el = document.getElementById("j-"+tag.end_id);
 								cont = tag.end_container;
 							}
-							console.log("Tags iteration " + i + " element -", el);
-							console.log("Tags element child nodes", el.childNodes);
+							// console.log("Tags iteration " + i + " element -", el);
+							// console.log("Tags element child nodes", el.childNodes);
 							for (var k = 0; k < el.childNodes.length; k++) {
 								// Somewhat working old version...
 								// if ((el.childNodes[k].nodeType == 3) && (el.childNodes[k].textContent == cont)) {
@@ -700,8 +707,8 @@
 								}
 							}
 						}
-						console.log("Tags containers", containers);
-						console.log("Tags new inds", newInds, tag.start_offset, tag.end_offset);
+						// console.log("Tags containers", containers);
+						// console.log("Tags new inds", newInds, tag.start_offset, tag.end_offset);
 						var r = document.createRange();
 						r.setStart(containers[0], newInds[0]);
 						r.setEnd(containers[1], newInds[1]);
