@@ -57,7 +57,7 @@ func apiSearch(i *Instance, w http.ResponseWriter, r *http.Request) (int, error)
 		docList[req.Id[j]] = 0
 	}
 
-	qry, err := lexes.ParseJson(req.Query, "plain_text", req.Fields, true, false)
+	qry, err := lexes.ParseJson(req.Query, "html", req.Fields, true, false)
 	if err != nil {
 		return 500, err
 	}
@@ -128,7 +128,7 @@ func (i *Instance) elasticSearchResponse(userId int64, topicId string, query []b
 func (i *Instance) elasticHits(userId int64, topicId string, queries []string) ([]ApiCaseResponse, error) {
 	res := make([]ApiCaseResponse, 0)
 	for q := range queries {
-		qry, err := lexes.ParseJson(queries[q], "plain_text", []string{"case_name", "date_filed", "id", "html"}, true, true)
+		qry, err := lexes.ParseJson(queries[q], "html", []string{"case_name", "date_filed", "id", "html"}, true, true)
 		if err != nil {
 			return nil, err
 		}
