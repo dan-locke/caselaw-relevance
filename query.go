@@ -128,7 +128,7 @@ func (i *Instance) elasticSearchResponse(userId int64, topicId string, query []b
 func (i *Instance) elasticHits(userId int64, topicId string, queries []string) ([]ApiCaseResponse, error) {
 	res := make([]ApiCaseResponse, 0)
 	for q := range queries {
-		qry, err := lexes.ParseJson(queries[q], "html", []string{"case_name", "date_filed", "id", "html"}, true, true)
+		qry, err := lexes.ParseJson(queries[q], "html", []string{"name", "date_filed", "id", "html"}, true, true)
 		if err != nil {
 			return nil, err
 		}
