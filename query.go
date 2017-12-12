@@ -52,35 +52,65 @@ func apiSearch(i *Instance, w http.ResponseWriter, r *http.Request) (int, error)
 		return 500, err
 	}
 
-	docList := map[string]int{}
-	for j := range req.Id {
-		docList[req.Id[j]] = 0
-	}
-
-	qry, err := lexes.ParseJson(req.Query, "html", req.Fields, true, false)
-	if err != nil {
-		return 500, err
-	}
-
 	// add query to database ...
 	_, err = dbSaveQuery(i.db, req.Query, req.TopicId, auth, time.Now())
 	if err != nil {
 		return 500, err
 	}
 
-	log.Printf("user %d - search - %s.\n", auth, req.Query)
-	res, err := i.elasticSearchResponse(auth, strconv.FormatInt(req.TopicId, 10), qry)
+	docList := map[string]int{}
+	for j := range req.Id {
+		docList[req.Id[j]] = 0
+	}
+
+	q, err := lexes.Parse(req.Query, "html", req.Fields, true, false)
 	if err != nil {
 		return 500, err
 	}
-	ret := []ApiCaseResponse{}
+	qry := *q
+	qry["from"] = 0
+	qry["size"] = i.config.Topics.PoolDepth * 2 
+
+	buff, err := json.Marshal(qry)
+	if err != nil {
+		return 500, err
+	}
+
+	log.Printf("user %d - search - %s.\n", auth, req.Query)
+	res, err := i.elasticSearchResponse(auth, strconv.FormatInt(req.TopicId, 10), buff)
+	if err != nil {
+		return 500, err
+	}
+	
+	hits := []ApiCaseResponse{}
+	count := 0
 
 	// Exclude existing docIds from new results ...
 	for j := range res.Results {
 		if _, ok := docList[res.Results[j].Id]; !ok {
+			hits = append(hits, res.Results[j])
+			count++ 
 			docList[res.Results[j].Id] = 0
-			ret = append(ret, res.Results[j])
 		}
+		if count >= i.config.Topics.PoolDepth {
+			break
+		}
+		// add on a few extra docs if the pool depth have all been retrieved already...
+		if j >= i.config.Topics.PoolDepth && count > 5 {
+			break
+		}
+	}
+
+	ret := TopicData{
+		Queries: []queryRes{
+			queryRes{
+				Text: req.Query,
+				Results: res.TotalHits,
+				PooledResults: count,
+			},
+		},
+		Results: hits,
+
 	}
 
 	wr, err := json.Marshal(ret)
@@ -181,8 +211,8 @@ func (i *Instance) elasticTopicQueryHits(userId int64, topicId string, queries [
 			if _, ok := seenId[api.Results[j].Id]; !ok {
 				cases = append(cases, api.Results[j])
 				count++
+				seenId[api.Results[j].Id] = 0
 			}
-			seenId[api.Results[j].Id] = 0
 		}
 		counts = append(counts, count)
 		totals = append(totals, api.TotalHits)
