@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -38,6 +39,14 @@ type assessmentBodyRequest struct {
 }
 
 func apiAssessTopic(i *Instance, w http.ResponseWriter, r *http.Request) (int, error) {
+	auth, err := i.authed(r)
+	if err != nil {
+		return 500, err
+	}
+	if auth < 0 {
+		return 401, errors.New("Unauthorized")
+	}
+
 	defer r.Body.Close()
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
@@ -51,14 +60,13 @@ func apiAssessTopic(i *Instance, w http.ResponseWriter, r *http.Request) (int, e
 		return 400, err
 	}
 
-	userId := int64(1)
 	date := time.Now()
 
 	for j := range res.Assessments {
 		dbSaveTopicAssessment(i.db, Assessment{
 			TopicId: res.Id,
 			DocId: res.Assessments[j].Id,
-			UserId: userId,
+			UserId: auth,
 			Relevance: res.Assessments[j].Relevance,
 			Date: date,
 		})

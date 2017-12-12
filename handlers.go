@@ -8,14 +8,25 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
+
+	lexes "lexes/parser"
 )
 
 type TopicData struct {
 
-	Queries []string
+	Queries []queryRes
 
 	Results []ApiCaseResponse
 
+}
+
+type queryRes struct {
+
+	Text string
+
+	Results int
+
+	PooledResults int
 }
 
 func loginViewHandler(i *Instance, w http.ResponseWriter, r *http.Request) (int, error) {
@@ -65,7 +76,8 @@ func indexViewHandler(i *Instance, w http.ResponseWriter, r *http.Request) (int,
 		// return 401, errors.New("Unauthorized")
 	}
 	log.Printf("user %d - handling index.\n", auth)
-	i.templates["index"].Execute(w, r)
+	http.Redirect(w, r, "/topics", 302)
+	// i.templates["index"].Execute(w, r)
 	return 200, nil
 }
 
@@ -250,20 +262,35 @@ func topicDataHandler(i *Instance, w http.ResponseWriter, r *http.Request) (int,
 	topic := i.getTopic(topicId)
 
 	queries := make([]map[string]interface{}, 0)
-	queries = append(queries, topic.EsQuery...)
-	for _, s := range []string{topic.CitingSentence, topic.CitingParagraph}{
-		queries = append(queries, createTextQuery(s))
+
+	queries = append(queries, createTextQuery(topic.Topic, "html"))
+	queryString := []string{topic.Topic}
+
+	for _, e := range topic.Extracts {
+		for _, q := range []string{e.CitingSentence, e.CitingParagraph}{ // will need to change this to fix for new topic struct... 
+			queries = append(queries, createTextQuery(q, "html"))
+			queryString = append(queryString, q)
+		}
+
+		queries = append(queries, e.EsQuery...)
+		queryString = append(queryString, e.Query...)
 	}
 
 	qry, err := dbGetUserQueries(i.db, topicId, auth)
 	if err != nil {
 		return 500, err
 	}
-	for q := range qry {
-		queries = append(queries, makeEsMatch(qry[q]))
+
+	for _, q := range qry {
+		lq, err := lexes.Parse(q, "html", nil, true, false)
+		if err != nil {
+			return 500, err
+		}
+		queries = append(queries, *lq)
+		queryString = append(queryString, q)
 	}
 
-	hits, err := i.elasticTopicQueryHits(auth, topicId, queries)
+	totals, pooled, hits, err := i.elasticTopicQueryHits(auth, topicId, queries)
 	if err != nil {
 		return 500, err
 	}
@@ -281,13 +308,22 @@ func topicDataHandler(i *Instance, w http.ResponseWriter, r *http.Request) (int,
 	// 	}
 	// }
 
-	queryString := []string{}
-	queryString = append(queryString, topic.Query...)
-	queryString = append(queryString, qry...)
+
 
 	t := TopicData {
-		Queries: queryString,
+		Queries: make([]queryRes, len(totals)),
 		Results: hits,
+	}
+
+	log.Println(len(queryString))
+	log.Println(len(totals))
+	log.Println(len(pooled))
+	log.Println(len(queries))
+
+	for j := range t.Queries {
+		t.Queries[j].Text = queryString[j]
+		t.Queries[j].Results = totals[j]
+		t.Queries[j].PooledResults = pooled[j]
 	}
 
 	buff, err := json.Marshal(t)

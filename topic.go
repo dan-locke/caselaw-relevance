@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 )
 
 type Topic struct {
@@ -15,6 +16,8 @@ type Topic struct {
 	Collection string `json:"collection"`
 
 	Id int `json:"id"`
+
+	Topic string `json:"topic"`
 
 	CaseId int `json:"case_id"`
 
@@ -25,6 +28,11 @@ type Topic struct {
 	Html string `json:"html"`
 
 	PlainText string `json:"plain_text"`
+
+	Extracts []extract`json:"extracts"`
+}
+
+type extract struct {
 
 	CitedId []int `json:"cited_id"`
 
@@ -43,8 +51,7 @@ type Topic struct {
 	Query []string `json:"query"`
 
 	EsQuery []map[string]interface{} `json:"es_query"`
-
-	NumResults int
+	
 }
 
 type TopicIndex []struct {
@@ -99,18 +106,20 @@ func loadfromFolder(dir, path string) (*map[string]Topic, error) {
 	}
 	topics := make(map[string]Topic)
 	for _, i := range fileInfo {
-		data, err := ioutil.ReadFile(i.Name())
-		if err != nil {
-			log.Panic(err)
-			return nil, err
+		if strings.Contains(i.Name(), ".json") {
+			data, err := ioutil.ReadFile(i.Name())
+			if err != nil {
+				log.Panic(err)
+				return nil, err
+			}
+			t := Topic{}
+			err = json.Unmarshal(data, &t)
+			if err != nil {
+				log.Panic(err)
+				return nil, err
+			}
+			topics[strconv.Itoa(t.Id)] = t
 		}
-		t := Topic{}
-		err = json.Unmarshal(data, &t)
-		if err != nil {
-			log.Panic(err)
-			return nil, err
-		}
-		topics[strconv.Itoa(t.Id)] = t
 	}
 
 	err = os.Chdir(dir)

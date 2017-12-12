@@ -74,15 +74,16 @@ func apiSearch(i *Instance, w http.ResponseWriter, r *http.Request) (int, error)
 		return 500, err
 	}
 	ret := []ApiCaseResponse{}
+
 	// Exclude existing docIds from new results ...
-	for j := range res {
-		if _, ok := docList[res[j].Id]; !ok {
-			docList[res[j].Id] = 0
-			ret = append(ret, res[j])
+	for j := range res.Results {
+		if _, ok := docList[res.Results[j].Id]; !ok {
+			docList[res.Results[j].Id] = 0
+			ret = append(ret, res.Results[j])
 		}
 	}
 
-	wr, err := json.Marshal(res)
+	wr, err := json.Marshal(ret)
 	if err != nil {
 		return 500, err
 	}
@@ -116,92 +117,97 @@ func dbGetUserQueries(db *sql.DB, topic string, user int64) ([]string, error) {
 	return queries, nil
 }
 
-func (i *Instance) elasticSearchResponse(userId int64, topicId string, query []byte) ([]ApiCaseResponse, error) {
+func (i *Instance) elasticSearchResponse(userId int64, topicId string, query []byte) (*ApiSearchResponse, error) {
 	esRes, err := i.es.Search(i.searchIndex, query)
 	if err != nil {
 		return nil, err
 	}
-	api, err := i.elasticSearchToApiCaseResponse(userId, topicId, esRes)
+	api, err := i.elasticSearchToApiSearchResponse(userId, topicId, esRes)
 	return api, err
 }
 
-func (i *Instance) elasticHits(userId int64, topicId string, queries []string) ([]ApiCaseResponse, error) {
-	res := make([]ApiCaseResponse, 0)
-	for q := range queries {
-		qry, err := lexes.ParseJson(queries[q], "html", []string{"name", "date_filed", "id", "html"}, true, true)
-		if err != nil {
-			return nil, err
-		}
+// func (i *Instance) elasticHits(userId int64, topicId string, queries []string) ([]ApiCaseResponse, error) {
+// 	res := make([]ApiCaseResponse, 0)
+// 	for q := range queries {
+// 		qry, err := lexes.ParseJson(queries[q], "html", []string{"name", "date_filed", "id", "html"}, true, true)
+// 		if err != nil {
+// 			return nil, err
+// 		}
 
-		esRes, err := i.es.Search(i.searchIndex, qry)
-		if err != nil {
-			return nil, err
-		}
+// 		esRes, err := i.es.Search(i.searchIndex, qry)
+// 		if err != nil {
+// 			return nil, err
+// 		}
 
-		api, err := i.elasticSearchToApiCaseResponse(userId, topicId, esRes)
-		if err != nil {
-			return nil, err
-		}
-		res = append(res, api...)
-	}
-	return res, nil
-}
+// 		api, err := i.elasticSearchToApiCaseResponse(userId, topicId, esRes)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 		res = append(res, api...)
+// 	}
+// 	return res, nil
+// }
 
-func (i *Instance) elasticTopicQueryHits(userId int64, topicId string, queries []map[string]interface{}) ([]ApiCaseResponse, error) {
-	res := make([]ApiCaseResponse, 0)
+
+// Really just exclude duplicates over the set of queries...
+// Returns total hits, pooled hits for each, result list, errors... 
+func (i *Instance) elasticTopicQueryHits(userId int64, topicId string, queries []map[string]interface{}) ([]int, []int, []ApiCaseResponse, error) {
+	cases := []ApiCaseResponse{}
+	counts := []int{}
+	totals := []int{}
+
 	seenId := map[string]int{}
 	for _, q := range queries {
-		q["_source"] = []string{"id", "case_name"}
+
+		q["_source"] = []string{"id", "name"}
 		q["from"] = 0
-		q["size"] = 30
+		q["size"] = i.config.Topics.PoolDepth
 		qry, err := json.Marshal(q)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 		esRes, err := i.es.Search(i.searchIndex, qry)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 
-		api, err := i.elasticSearchToApiCaseResponse(userId, topicId, esRes)
+		api, err := i.elasticSearchToApiSearchResponse(userId, topicId, esRes)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
-		for j := range api {
-			if _, ok := seenId[api[j].Id]; !ok {
-				res = append(res, api[j])
+
+		count := 0 
+		for j := range api.Results {
+			if _, ok := seenId[api.Results[j].Id]; !ok {
+				cases = append(cases, api.Results[j])
+				count++
 			}
-			seenId[api[j].Id] = 0
+			seenId[api.Results[j].Id] = 0
 		}
+		counts = append(counts, count)
+		totals = append(totals, api.TotalHits)
 	}
-	return res, nil
+	return totals, counts, cases, nil
 }
+
 
 // -----------------------------------------------------------------------------
 // For creating standard match queries from pieces of text
-func makeEsMatch(s string) map[string]interface{} {
+func makeEsMatch(text, field string) map[string]interface{} {
 	return map[string]interface{} {
 		"query" : map[string]interface{} {
-			"plain_text" : s,
-		},
-		"from" : 0,
-		"size" : 30,
-	}
-}
-
-func createTextQuery(s string) map[string]interface{} {
-	nums := getNumbers(s)
-	text := cleanText(s)
-	text = text + " " + nums
-	q := map[string]interface{} {
-		"query" : map[string]interface{} {
 			"match" : map[string]interface{} {
-				"plain_text" : text,
+				field : text,
 			},
 		},
 	}
+}
 
-	return q
+func createTextQuery(s, field string) map[string]interface{} {
+	nums := getNumbers(s)
+	text := cleanText(s)
+	text = text + " " + nums
+	return makeEsMatch(text, field)
 }
 
 func cleanText(text string) string {

@@ -71,6 +71,8 @@ type Config struct {
 
 		Location     string `json:"location"`
 
+		PoolDepth 	 int `json:"pool_depth"`
+
 	} `json:"topics"`
 
 }

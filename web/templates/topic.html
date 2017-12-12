@@ -3,9 +3,9 @@
 {{ end }}
 
 {{ define "content" }}
-<div class="container" id="vm">
-	<div class="row justify-content-start align-items-start">
-		<div class="col-5">
+<div class="container-fluid" id="vm">
+	<div class="row">
+		<div class="col-lg-5">
 			<div class="card" style="max-height: 90vh;">
 				<div class="card-header">
 					<ul id="card-nav" class="nav nav-tabs card-header-tabs" role="tablist">
@@ -26,41 +26,16 @@
 				</div>
 				<div id="card-nav-content" class="card-body tab-content" style=" overflow: scroll;">
 					<div role="tabpanel" class="tab-pane fade show active" id="topic" aria-labelledby="topic-tab">
-						<h6 class="card-subtitle mb-2 text-muted">{{ .CaseTitle }} | {{ .CaseId }}</h6>
-						<p class="card-text">
-							<ul class="list-group border-right-0 border-left-0 ">
-								<li class="list-group-item border-right-0 border-left-0 border-top-0">
-									{{ range $i, $case := .CitedCase }}
-									{{ if $i }}
-									|
-									{{ end }}
-									{{ $case }}
-									{{ end }}
-								</li>
-								<li class="list-group-item border-right-0 border-left-0">
-									{{ range $i, $id := .CitedId }}
-									{{ if $i }}
-									|
-									{{ end }}
-									{{ $id }}
-									{{ end }}
-								</li>
-								<li class="list-group-item border-right-0 border-left-0">
-									{{ range $i, $keyword := .RelevantKeywords }}
-									{{ if $i }}
-									|
-									{{ end }}
-									{{ $keyword }}
-									{{ end }}
-								</li>
-								<li class="list-group-item border-right-0 border-left-0">{{ .CitingSentence }}</li>
-								<li class="list-group-item border-right-0 border-left-0 border-bottom-0">{{ .CitingParagraph }}</li>
-							</ul>
-						</p>
+						{{ .Topic }}
+						<br/><br/>
+						<h6 class="card-subtitle mb-2 text-muted">Decision info</h6> 
+						<hr>
+						{{ .CaseTitle }} | {{ .CaseId }}
 					</div>
 					<div role="tabpanel" class="tab-pane fade" id="tags" aria-labelledby="tag-tab">
 						<h6 class="card-subtitle mb-2 text-muted">Current tags</h6>
 						<p class="card-text" id="seltxt">
+							Press the tag button, or press the 't' key to tag.  
 							<ul class="list-group border-right-0 border-left-0">
 								<li class="list-group-item  border-right-0 border-left-0" v-for="tag in tags">
 									[[ tag.text ]]
@@ -100,9 +75,17 @@
 									<li class="page-item" v-bind:class="{disabled : getPage() == 0}">
 										<a class="page-link" href="#" aria-label="Previous" v-on:click="prevPage">Previous</a>
 									</li>
-									<li v-for="p in visPages" class="page-item">
+<!-- 									<li v-for="p in visPages" class="page-item">
 										<a class="page-link" href="#" v-on:click="changePage(p)">[[ p + 1 ]]</a>
-									</li>
+									</li> -->
+									<span v-for="p in visPages">
+										<span v-if="p == page">
+											<li class="page-item active"><a class="page-link" href="#" v-on:click="changePage(p)">[[ p + 1 ]]</a></li>
+										</span>
+										<span v-else>
+											<li class="page-item"><a class="page-link" href="#" v-on:click="changePage(p)">[[ p + 1 ]]</a></li>
+										</span>
+									</span>
 									<li class="page-item" v-bind:class="{disabled : getPage() >= numPages}">
 										<a class="page-link" href="#" aria-label="Next" v-on:click="nextPage">Next</a>
 									</li>
@@ -122,9 +105,12 @@
 							<br>
 							<span v-if="queries">
 								<ul class="list-group border-right-0 border-left-0">
-									<li class="list-group-item  border-right-0 border-left-0" v-for="q in queries">
-										[[ q ]]
-									</li>
+									<span v-for="q in queries">
+										<li class="list-group-item  border-right-0 border-left-0 border-top-0 border-bottom-0">
+											[[ q ]]
+										</li>
+										<hr>
+									</span>
 								</ul>
 							</span>
 						</p>
@@ -135,7 +121,7 @@
 				</div>
 			</div>
 		</div>
-		<div class="col-7">
+		<div class="col-lg-7">
 			<div class="card" style="max-height: 90vh;">
 				<div class="card-header">[[ getCurrentDoc().case_name ]] | [[ getCurrentDoc().id ]]
 					<span v-if="getCurrentDoc().relevance === '' || getCurrentDoc().relevance === undefined">
@@ -292,7 +278,7 @@
 			queries: [],
 			query: "",
 			page: 0,
-			perPage: 5,
+			perPage: 15,
 			pageNumVis: 5,
 			pageData: [],
 		},
@@ -310,7 +296,6 @@
 					for (var i = this.page; i < max; i++) {
 						ret.push(i);
 					}
-					console.log(max, ret)
 					return ret;
 				},
 		},
@@ -728,5 +713,16 @@
 			}.bind(this), "json");
 		}
 	});
+
+	
+	document.onkeydown = function (e) {
+		e = e || window.event;
+		switch (e.which || e.keyCode) {
+			case 84: // t
+			case 116:
+				vm.getSelection();
+				break;
+		}
+	};
 </script>
 {{ end }}

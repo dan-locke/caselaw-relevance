@@ -11,7 +11,7 @@ type Decision struct {
 
 	Id string `json:"id"`
 
-	CaseName string `json:"case_name"`
+	CaseName string `json:"name"`
 
 	DateFiled string `json:"date_filed,omitempty"`
 
@@ -42,6 +42,13 @@ type ApiCaseResponse struct {
 
 }
 
+type ApiSearchResponse struct {
+
+	TotalHits int
+
+	Results []ApiCaseResponse
+}
+
 type ApiGetResponse Decision
 
 func parseDecisionFromMap(m map[string]interface{}) (Decision, error) {
@@ -55,7 +62,7 @@ func parseDecisionFromMap(m map[string]interface{}) (Decision, error) {
 				if !ok {
 					return Decision{}, errors.New("Could not pass Id as int64")
 				}
-			case "case_name":
+			case "name":
 				dec.CaseName, ok = v.(string)
 				if !ok {
 					return Decision{}, errors.New("Could not pass Case name as string")
@@ -85,14 +92,51 @@ func elasticGetToApiResponse(s *elastic.GetResponse) (*ApiGetResponse, error) {
 	return &r, nil
 }
 
-func (i *Instance) elasticSearchToApiCaseResponse(userId int64, topicId string, s *elastic.SearchResponse) ([]ApiCaseResponse, error) {
+// func (i *Instance) elasticSearchToApiCaseResponse(userId int64, topicId string, s *elastic.SearchResponse) (*SearchResponse, error) {
+// 	res := make([]ApiCaseResponse, 0)
+
+// 	assessed, err := dbGetAssessedPerTopic(i.db, userId, topicId)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	for j := range s.Hits.Hits {
+// 		hit, err := parseDecisionFromMap(s.Hits.Hits[j].Source.(map[string]interface{}))
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 		stored := false
+// 		relevance := ""
+// 		if k, ok := assessed[s.Hits.Hits[j].Id]; ok {
+// 			relevance = k
+// 			stored = true
+// 		}
+// 		res = append(res, ApiCaseResponse {
+// 			Score : s.Hits.Hits[j].Score,
+// 			Id : s.Hits.Hits[j].Id,
+// 			CaseName : hit.CaseName,
+// 			DateFiled : hit.DateFiled,
+// 			Html : hit.Html,
+// 			Stored: stored,
+// 			Relevance: relevance,
+// 		})
+// 	}
+
+// 	r := SearchResponse {
+// 		TotalHits: int(s.Hits.Total),
+// 		Results: res,
+// 	}
+
+// 	return &r, nil
+// }
+
+func (i *Instance) elasticSearchToApiSearchResponse(userId int64, topicId string, s *elastic.SearchResponse) (*ApiSearchResponse, error) {
 	res := make([]ApiCaseResponse, 0)
 
 	assessed, err := dbGetAssessedPerTopic(i.db, userId, topicId)
 	if err != nil {
 		return nil, err
 	}
-
 
 	for j := range s.Hits.Hits {
 		hit, err := parseDecisionFromMap(s.Hits.Hits[j].Source.(map[string]interface{}))
@@ -115,7 +159,13 @@ func (i *Instance) elasticSearchToApiCaseResponse(userId int64, topicId string, 
 			Relevance: relevance,
 		})
 	}
-	return res, nil
+
+	r := ApiSearchResponse {
+		TotalHits: int(s.Hits.Total),
+		Results: res,
+	}
+
+	return &r, nil
 }
 
 // func elasticSearchToApiQueryResponse(query []byte, s *elastic.SearchResponse) (*ApiQueryResponse, error) {
