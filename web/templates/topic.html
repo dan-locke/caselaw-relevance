@@ -13,13 +13,13 @@
 							<a id="topic-tab" class="nav-link active" data-toggle="tab" aria-controls="topic" aria-expanded="true" href="#topic">Topic {{ .Id }}
 							</a>
 						</li>
-						<li class="nav-item">
+						<li class="nav-item" v-if="startLoad" v-cloak>
 							<a id="tag-tab" class="nav-link" data-toggle="tab" aria-controls="tags" href="#tags">Tags</a>
 						</li>
-						<li class="nav-item">
+						<li class="nav-item" v-if="startLoad" v-cloak>
 							<a id="docs-tab" class="nav-link" data-toggle="tab" aria-controls="docs" href="#docs">Docs</a>
 						</li>
-						<li class="nav-item">
+						<li class="nav-item" v-if="startLoad" v-cloak>
 							<a id="search-tab" class="nav-link" data-toggle="tab" aria-controls="srch" href="#srch">Search</a>
 						</li>
 					</ul>
@@ -75,9 +75,6 @@
 									<li class="page-item" v-bind:class="{disabled : getPage() == 0}">
 										<a class="page-link" href="#" aria-label="Previous" v-on:click="prevPage">Previous</a>
 									</li>
-<!-- 									<li v-for="p in visPages" class="page-item">
-										<a class="page-link" href="#" v-on:click="changePage(p)">[[ p + 1 ]]</a>
-									</li> -->
 									<span v-for="p in visPages">
 										<span v-if="p == page">
 											<li class="page-item active"><a class="page-link" href="#" v-on:click="changePage(p)">[[ p + 1 ]]</a></li>
@@ -96,34 +93,48 @@
 					<div role="tabpanel" class="tab-pane fade" id="srch" aria-labelledby="srch-tab">
 						<h6 class="card-subtitle mb-2 text-muted">Documents</h6>
 						<p class="card-text">
-							Search for further results. These will be added to the list of current documents that you are evaluating. A maximum of 20 results for each search are returned.
+							Search for further results. These will be added to the list of current documents that you are evaluating. A maximum of 15 results for each search are returned.
 							<br>
-							<form action="#" class="form-inline my-2 my-lg-0">
-								<input class="form-control mr-sm-2" type="text" placeholder="Search" id="search-input" v-model="query">
-								<button class="btn btn-outline-success my-2 my-sm-0" type="submit" v-on:click="searchTopic">Search</button>
-							</form>
+							<div class="row">
+								<div class="col">
+									<form action="#" class="form-inline my-2 my-lg-0">
+										<input class="form-control mr-sm-2" type="text" placeholder="Search" id="search-input" v-model="query">
+										<button class="btn btn-outline-success my-2 my-sm-0" type="submit" v-on:click="searchTopic">Search</button>
+									</form>
+								</div>
+								<b>Total results: [[ numHits]] </b> 
+							</div>
 							<br>
 							<span v-if="queries">
-								<ul class="list-group border-right-0 border-left-0">
-									<span v-for="q in queries">
-										<li class="list-group-item  border-right-0 border-left-0 border-top-0 border-bottom-0">
-											[[ q ]]
-										</li>
-										<hr>
-									</span>
-								</ul>
+								<table class="table">
+									<thead>
+										<tr>
+											<th scope="col">Query</th>
+											<th scope="col">Results</th>
+											<th scope="col">New Results</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr v-for="q in queries">
+											<td> [[ q.Text ]] </td>
+											<td> [[ q.Results ]] </td>
+											<td> [[ q.PooledResults ]] </td>	
+										</tr>
+									</tbody>
+								</table>
 							</span>
 						</p>
 					</div>
 				</div>
-				<div class="card-footer">
-					<button class="btn btn-primary" v-on:click="submit">Submit all</button>
+				<div class="card-footer" v-if="startLoad" v-cloak>
+					Assessing [[ currentDoc + 1 ]] of [[ numHits ]].
 				</div>
 			</div>
 		</div>
 		<div class="col-lg-7">
 			<div class="card" style="max-height: 90vh;">
-				<div class="card-header">[[ getCurrentDoc().case_name ]] | [[ getCurrentDoc().id ]]
+				<div class="card-header" v-if="startLoad" v-cloak>
+					[[ getCurrentDoc().case_name ]] | [[ getCurrentDoc().id ]]
 					<span v-if="getCurrentDoc().relevance === '' || getCurrentDoc().relevance === undefined">
 						<span class="badge badge-danger">Not assessed</span>
 					</span>
@@ -136,12 +147,15 @@
 						</span>
 					</span>
 				</div>
-				<div class="card-body" style="overflow: scroll;">
+				<div class="card-body" id="j-text-scroller" style="overflow: scroll;">
+					<div v-if="loading" v-cloak>
+						<img style="margin: auto; display: block;" src="/static/img/Spinner.gif"></img>
+					</div>
 					<p class="card-text">
 						<p v-html="getCurrentDocHtml()" id="j-txt"></p>
 					</p>
 				</div>
-				<div class="card-footer">
+				<div class="card-footer" v-if="startLoad" v-cloak>
 					<div class="row">
 						<div class="col">
 							<button class="btn btn-secondary" v-on:click="previousDoc">Previous</button>
@@ -278,9 +292,11 @@
 			queries: [],
 			query: "",
 			page: 0,
-			perPage: 15,
+			perPage: 12,
 			pageNumVis: 5,
 			pageData: [],
+			loading: true,
+			startLoad: false, 
 		},
 		computed: {
 				numHits: function() {
@@ -380,6 +396,7 @@
 							this.addIds();
 							this.getTags();
 						});
+						this.loading = false;
 					} else if (xhr.readyState === 4 && xhr.status !== 200) {
 						window.alert('Something went wrong getting tag data!')
 					}
@@ -402,6 +419,8 @@
 				var ind = vm.hits.findIndex(i => i.id === id);
 				this.prevDoc = this.currentDoc
 				this.currentDoc = ind;
+				this.loading = true;
+				$("#j-text-scroller").animate({ scrollTop: 0 }, "fast");
 			},
 
 			nextDoc: function(event) {
@@ -590,7 +609,7 @@
 					ids.push(this.hits[i].id);
 				}
 				if (vm.query != "") {
-					vm.queries.push(vm.query);
+					// vm.queries.push(vm.query);
 					var xhr = new XMLHttpRequest();
 					xhr.open('POST', '/search');
 					xhr.setRequestHeader('Content-Type', 'application/json');
@@ -606,8 +625,11 @@
 						console.log(xhr.readyState, xhr.status);
 						if (xhr.readyState === 4 && xhr.status === 200) {
 							var sres = JSON.parse(xhr.responseText);
-							for (var i = 0; i < sres.length; i++) {
-								vm.hits.push(sres[i]);
+							console.log("Sres - ", sres)
+							vm.queries.push(sres.Queries[0])
+							for (var i = 0; i < sres.Results.length; i++) {
+								vm.hits.push(sres.Results[i])
+
 							}
 						} else if (xhr.readyState === 4 && xhr.status !== 200) {
 							window.alert('Something went wrong with your search. Please let me know.')
@@ -710,6 +732,7 @@
 				this.hits = response.Results;
 				this.slicePageData();
 				this.getDoc();
+				this.startLoad = true;
 			}.bind(this), "json");
 		}
 	});

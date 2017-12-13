@@ -63,6 +63,7 @@ func apiSearch(i *Instance, w http.ResponseWriter, r *http.Request) (int, error)
 		docList[req.Id[j]] = 0
 	}
 
+	log.Println("Query - ", req.Query)
 	q, err := lexes.Parse(req.Query, "html", req.Fields, true, false)
 	if err != nil {
 		return 500, err
