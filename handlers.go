@@ -290,46 +290,36 @@ func topicDataHandler(i *Instance, w http.ResponseWriter, r *http.Request) (int,
 		queryString = append(queryString, q)
 	}
 
-	totals, pooled, hits, err := i.elasticTopicQueryHits(auth, topicId, queries)
+	qStats, hits, err := i.elasticTopicQueryHits(auth, topicId, queries)
 	if err != nil {
 		return 500, err
 	}
 
-	// assessed, err := dbGetAssessedPerTopic(i.db, auth, topicId)
-	// if err != nil {
-	// 	return 500, err
-	// }
-	//
-	// for j := range hits {
-	// 	hits[j].Stored = false
-	// 	if k, ok := assessed[hits[j].Id]; ok {
-	// 		hits[j].Relevance = k
-	// 		hits[j].Stored = true
-	// 	}
-	// }
-
-
-
 	t := TopicData {
-		Queries: make([]queryRes, len(totals)),
+		Queries: make([]queryRes, len(qStats)),
 		Results: hits,
 	}
 
-	log.Println(len(queryString))
-	log.Println(len(totals))
-	log.Println(len(pooled))
-	log.Println(len(queries))
+	log.Println("Queries -", len(queryString))
+	log.Println("Stats -", qStats)
+	// log.Println(len(totals))
+	// log.Println(len(pooled))
+	// log.Println(len(queries))
 
-	for j := range t.Queries {
+	for j := range qStats {
 		t.Queries[j].Text = queryString[j]
-		t.Queries[j].Results = totals[j]
-		t.Queries[j].PooledResults = pooled[j]
+		t.Queries[j].Results = qStats[j].total
+		t.Queries[j].PooledResults = qStats[j].count
 	}
+
+	log.Println("Gere")
 
 	buff, err := json.Marshal(t)
 	if err != nil {
 		return 500, err
 	}
+	log.Println("here")
+
 	w.Write(buff)
 	return 200, nil
 }

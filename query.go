@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	lexes "lexes/parser"
@@ -179,46 +180,89 @@ func (i *Instance) elasticSearchResponse(userId int64, topicId string, query []b
 // 	return res, nil
 // }
 
+type Ret struct {
+	count int
+	total int
+}
+
 
 // Really just exclude duplicates over the set of queries...
 // Returns total hits, pooled hits for each, result list, errors... 
-func (i *Instance) elasticTopicQueryHits(userId int64, topicId string, queries []map[string]interface{}) ([]int, []int, []ApiCaseResponse, error) {
-	cases := []ApiCaseResponse{}
-	counts := []int{}
-	totals := []int{}
+func (i *Instance) elasticTopicQueryHits(userId int64, topicId string, queries []map[string]interface{}) ([]Ret, []ApiCaseResponse, error) {
+	retQueue :=  make(chan Ret)
+	hitsQueue := make(chan ApiCaseResponse)
 
-	seenId := map[string]int{}
-	for _, q := range queries {
+	seenId := new(sync.Map)
+	errorChan := make(chan error)
 
-		q["_source"] = []string{"id", "name"}
-		q["from"] = 0
-		q["size"] = i.config.Topics.PoolDepth
-		qry, err := json.Marshal(q)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		esRes, err := i.es.Search(i.searchIndex, qry)
-		if err != nil {
-			return nil, nil, nil, err
-		}
+	var wg sync.WaitGroup
+	wg.Add(len(queries))
 
-		api, err := i.elasticSearchToApiSearchResponse(userId, topicId, esRes)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-
-		count := 0 
-		for j := range api.Results {
-			if _, ok := seenId[api.Results[j].Id]; !ok {
-				cases = append(cases, api.Results[j])
-				count++
-				seenId[api.Results[j].Id] = 0
+	for x := range queries {
+		go func(x int) error {
+			defer wg.Done()
+			q := queries[x]
+			q["_source"] = []string{"id", "name"}
+			q["from"] = 0
+			q["size"] = i.config.Topics.PoolDepth
+			qry, err := json.Marshal(q)
+			if err != nil {
+				errorChan <- err 	
 			}
-		}
-		counts = append(counts, count)
-		totals = append(totals, api.TotalHits)
+
+			log.Println("Query - ", x)
+			esRes, err := i.es.Search(i.searchIndex, qry)
+			if err != nil {
+				errorChan <- err 	
+			}
+
+			api, err := i.elasticSearchToApiSearchResponse(userId, topicId, esRes)
+			if err != nil {
+				errorChan <- err 	
+			}
+			log.Println("Here a -", x)
+			count := 0 
+			for j := range api.Results {
+				if _, ok := seenId.LoadOrStore(api.Results[j].Id, 0); !ok {
+					// hitsQueue <- api.Results[j]
+					count++
+				}
+			}
+			log.Println("Here b - ", x)
+
+			retQueue <- Ret{
+				count: count, 
+				total: api.TotalHits,
+			}
+		}(x)
+		
 	}
-	return totals, counts, cases, nil
+
+	log.Println("Before wait")
+	wg.Wait()
+	close(retQueue)
+	close(hitsQueue)
+
+	
+	log.Println("len ret chan -", len(retQueue))
+	log.Println("len hits chan -", len(hitsQueue))
+
+
+	stats := []Ret{}
+	cases := []ApiCaseResponse{}
+
+	for t := range retQueue {
+		stats = append(stats, t)
+	}
+
+	for t := range hitsQueue {
+		cases = append(cases, t)
+	}
+
+
+	log.Println("End of queries pool -", cases)
+	return stats, cases, nil
+	// return totals, counts, cases, nil
 }
 
 
