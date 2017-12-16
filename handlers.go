@@ -290,35 +290,20 @@ func topicDataHandler(i *Instance, w http.ResponseWriter, r *http.Request) (int,
 		queryString = append(queryString, q)
 	}
 
-	qStats, hits, err := i.elasticTopicQueryHits(auth, topicId, queries)
+	qStats, hits, err := i.elasticTopicQueryHits(auth, topicId, queryString, queries)
 	if err != nil {
 		return 500, err
 	}
 
 	t := TopicData {
-		Queries: make([]queryRes, len(qStats)),
+		Queries: qStats,
 		Results: hits,
 	}
-
-	log.Println("Queries -", len(queryString))
-	log.Println("Stats -", qStats)
-	// log.Println(len(totals))
-	// log.Println(len(pooled))
-	// log.Println(len(queries))
-
-	for j := range qStats {
-		t.Queries[j].Text = queryString[j]
-		t.Queries[j].Results = qStats[j].total
-		t.Queries[j].PooledResults = qStats[j].count
-	}
-
-	log.Println("Gere")
 
 	buff, err := json.Marshal(t)
 	if err != nil {
 		return 500, err
 	}
-	log.Println("here")
 
 	w.Write(buff)
 	return 200, nil

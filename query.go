@@ -180,26 +180,20 @@ func (i *Instance) elasticSearchResponse(userId int64, topicId string, query []b
 // 	return res, nil
 // }
 
-type Ret struct {
-	count int
-	total int
-}
-
-
 // Really just exclude duplicates over the set of queries...
 // Returns total hits, pooled hits for each, result list, errors... 
-func (i *Instance) elasticTopicQueryHits(userId int64, topicId string, queries []map[string]interface{}) ([]Ret, []ApiCaseResponse, error) {
-	retQueue :=  make(chan Ret)
-	hitsQueue := make(chan ApiCaseResponse)
+func (i *Instance) elasticTopicQueryHits(userId int64, topicId string, queryStrings []string, queries []map[string]interface{}) ([]queryRes, []ApiCaseResponse, error) {
+	retQueue :=  make(chan queryRes, len(queries))
+	hitsQueue := make(chan ApiCaseResponse, i.config.Topics.PoolDepth * len(queries))
 
 	seenId := new(sync.Map)
-	errorChan := make(chan error)
+	errorChan := make(chan error, len(queries))
 
 	var wg sync.WaitGroup
-	wg.Add(len(queries))
 
 	for x := range queries {
-		go func(x int) error {
+		wg.Add(1)
+		go func(x int) {
 			defer wg.Done()
 			q := queries[x]
 			q["_source"] = []string{"id", "name"}
@@ -210,7 +204,6 @@ func (i *Instance) elasticTopicQueryHits(userId int64, topicId string, queries [
 				errorChan <- err 	
 			}
 
-			log.Println("Query - ", x)
 			esRes, err := i.es.Search(i.searchIndex, qry)
 			if err != nil {
 				errorChan <- err 	
@@ -220,35 +213,36 @@ func (i *Instance) elasticTopicQueryHits(userId int64, topicId string, queries [
 			if err != nil {
 				errorChan <- err 	
 			}
-			log.Println("Here a -", x)
+
 			count := 0 
 			for j := range api.Results {
 				if _, ok := seenId.LoadOrStore(api.Results[j].Id, 0); !ok {
-					// hitsQueue <- api.Results[j]
+					hitsQueue <- api.Results[j]
 					count++
 				}
 			}
-			log.Println("Here b - ", x)
 
-			retQueue <- Ret{
-				count: count, 
-				total: api.TotalHits,
+			retQueue <- queryRes{
+				Text: queryStrings[x],
+				PooledResults: count, 
+				Results: api.TotalHits,
 			}
+
 		}(x)
 		
 	}
 
-	log.Println("Before wait")
 	wg.Wait()
+
+	close(errorChan)
 	close(retQueue)
 	close(hitsQueue)
 
-	
-	log.Println("len ret chan -", len(retQueue))
-	log.Println("len hits chan -", len(hitsQueue))
+	if len(errorChan) >= 1 {
+		return nil, nil, <-errorChan
+	}
 
-
-	stats := []Ret{}
+	stats := []queryRes{}
 	cases := []ApiCaseResponse{}
 
 	for t := range retQueue {
@@ -259,10 +253,7 @@ func (i *Instance) elasticTopicQueryHits(userId int64, topicId string, queries [
 		cases = append(cases, t)
 	}
 
-
-	log.Println("End of queries pool -", cases)
 	return stats, cases, nil
-	// return totals, counts, cases, nil
 }
 
 

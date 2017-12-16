@@ -727,13 +727,32 @@
 			}
 		},
 		created: function() {
-			$.get('/data/' + topicId, function (response, status) {
-				this.queries = response.Queries;
-				this.hits = response.Results;
-				this.slicePageData();
-				this.getDoc();
-				this.startLoad = true;
-			}.bind(this), "json");
+			// $.get('/data/' + topicId, function (response, status) {
+			// 	this.queries = response.Queries;
+			// 	this.hits = response.Results;
+			// 	this.slicePageData();
+			// 	this.getDoc();
+			// 	this.startLoad = true;
+			// }.bind(this), "json");
+
+			var vm = this;
+			var xhr = new XMLHttpRequest();
+			xhr.open('GET', '/data/' + topicId, true);
+			xhr.send();
+			// console.log(xhr);
+			xhr.onreadystatechange = function () {
+				if (xhr.readyState === 4 && xhr.status === 200) {
+					console.log("State change ...")
+					var sres = JSON.parse(xhr.responseText);
+					vm.queries = sres.Queries;
+					vm.hits = sres.Results;
+					vm.slicePageData();
+					vm.getDoc();
+					vm.startLoad = true;
+				} else if (xhr.readyState === 4 && xhr.status != 200) {
+					window.alert('Something went wrong with getting the topic data. Please let me know.')
+				}
+			}
 		}
 	});
 
