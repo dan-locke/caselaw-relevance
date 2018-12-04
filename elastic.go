@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	elastic "elastic-go"
+	elastic "github.com/danlocke/elastic-go"
 )
 
 type Decision struct {

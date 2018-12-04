@@ -9,7 +9,7 @@ import (
 
 	"github.com/gorilla/mux"
 
-	lexes "lexes/parser"
+	lexes "github.com/danlocke/lexes/parser"
 )
 
 type TopicData struct {
@@ -261,42 +261,52 @@ func topicDataHandler(i *Instance, w http.ResponseWriter, r *http.Request) (int,
 
 	topic := i.getTopic(topicId)
 
-	queries := make([]map[string]interface{}, 0)
+	var qrys []queryRes
+	var hits []ApiCaseResponse
 
-	queries = append(queries, createTextQuery(topic.Topic, "html"))
-	queryString := []string{topic.Topic}
-
-	for _, e := range topic.Extracts {
-		for _, q := range []string{e.CitingSentence, e.CitingParagraph}{ // will need to change this to fix for new topic struct... 
-			queries = append(queries, createTextQuery(q, "html"))
-			queryString = append(queryString, q)
-		}
-
-		queries = append(queries, e.EsQuery...)
-		queryString = append(queryString, e.Query...)
-	}
-
-	qry, err := dbGetUserQueries(i.db, topicId, auth)
-	if err != nil {
-		return 500, err
-	}
-
-	for _, q := range qry {
-		lq, err := lexes.Parse(q, "html", nil, true, false)
+	if i.byList {
+		qrys, hits, err = i.elasticTopicDocListQuery(auth, topicId)
 		if err != nil {
 			return 500, err
 		}
-		queries = append(queries, *lq)
-		queryString = append(queryString, q)
-	}
+	} else {
+		queries := make([]map[string]interface{}, 0)
 
-	qStats, hits, err := i.elasticTopicQueryHits(auth, topicId, queryString, queries)
-	if err != nil {
-		return 500, err
+		queries = append(queries, createTextQuery(topic.Topic, "html"))
+		queryString := []string{topic.Topic}
+
+		for _, e := range topic.Extracts {
+			for _, q := range []string{e.CitingSentence, e.CitingParagraph}{ // will need to change this to fix for new topic struct...
+				queries = append(queries, createTextQuery(q, "html"))
+				queryString = append(queryString, q)
+			}
+
+			queries = append(queries, e.EsQuery...)
+			queryString = append(queryString, e.Query...)
+		}
+
+		qry, err := dbGetUserQueries(i.db, topicId, auth)
+		if err != nil {
+			return 500, err
+		}
+
+		for _, q := range qry {
+			lq, err := lexes.Parse(q, "html", nil, true, false)
+			if err != nil {
+				return 500, err
+			}
+			queries = append(queries, *lq)
+			queryString = append(queryString, q)
+		}
+
+		qrys, hits, err = i.elasticTopicQueryHits(auth, topicId, queryString, queries)
+		if err != nil {
+			return 500, err
+		}
 	}
 
 	t := TopicData {
-		Queries: qStats,
+		Queries: qrys,
 		Results: hits,
 	}
 

@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"fmt"
 )
 
 type Topic struct {
@@ -177,4 +178,63 @@ func (i *Instance) updateTopic(topic string, t Topic) error {
 	i.topics[topic] = t
 	// lazy approach, easier to resave whole file
 	return saveTopics(i.config.Topics.DataFileName, i.topics)
+}
+
+
+
+func loadTopicIdFile(path string) (map[string][]string, error) {
+	buff, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	topics := map[string][]string{}
+
+	lines := bytes.Split(buff, []byte("\n"))
+	for i := range lines {
+		if len(lines[i]) == 0 {
+			break
+		}
+		parts := bytes.Fields(lines[i])
+		// cnt := 0
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("Incorrect number of items in line: %q\n", lines[i])
+		}
+		//id, err := strconv.Atoi(string(parts[0]))
+		if err != nil {
+			return nil, err
+		}
+
+		//topics[id] = append(topics[id], string(parts[1]))
+		topics[string(parts[0])] = append(topics[string(parts[0])], string(parts[1]))
+	}
+
+	return topics, nil
+}
+
+func loadQrel(path string) (map[string][]string, error) {
+	buff, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	topics := map[string][]string{}
+
+	lines := bytes.Split(buff, []byte("\n"))
+	for i := range lines {
+		parts := bytes.Fields(lines[i])
+		// cnt := 0
+		if len(parts) != 4 {
+			return nil, fmt.Errorf("Incorrect number of items in line: %q\n", lines[i])
+		}
+		//id, err := strconv.Atoi(string(parts[0]))
+		if err != nil {
+			return nil, err
+		}
+
+		//topics[id] = append(topics[id], string(parts[1]))
+		topics[string(parts[0])] = append(topics[string(parts[0])], string(parts[2]))
+	}
+
+	return topics, nil
 }

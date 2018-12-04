@@ -1,6 +1,8 @@
 .DS_Store
 caselaw-relevance
 config.json
-topic/*
+topic/
 topic.dat
-web/static/*
+web/static/
+*.txt
+*.json

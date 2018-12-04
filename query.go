@@ -14,7 +14,8 @@ import (
 	"sync"
 	"time"
 
-	lexes "lexes/parser"
+	lexes "github.com/danlocke/lexes/parser"
+	"fmt"
 )
 
 type topicSearchPostReq struct {
@@ -150,7 +151,7 @@ func dbGetUserQueries(db *sql.DB, topic string, user int64) ([]string, error) {
 }
 
 func (i *Instance) elasticSearchResponse(userId int64, topicId string, query []byte) (*ApiSearchResponse, error) {
-	esRes, err := i.es.Search(i.searchIndex, query)
+	esRes, err := i.es.Search(i.searchIndex, query, "")
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +188,7 @@ func (i *Instance) elasticTopicQueryHits(userId int64, topicId string, queryStri
 	hitsQueue := make(chan ApiCaseResponse, i.config.Topics.PoolDepth * len(queries))
 
 	seenId := new(sync.Map)
-	errorChan := make(chan error, len(queries))
+	errorChan := make(chan error, len(queries) * 3)
 
 	var wg sync.WaitGroup
 
@@ -204,7 +205,7 @@ func (i *Instance) elasticTopicQueryHits(userId int64, topicId string, queryStri
 				errorChan <- err 	
 			}
 
-			esRes, err := i.es.Search(i.searchIndex, qry)
+			esRes, err := i.es.Search(i.searchIndex, qry, "")
 			if err != nil {
 				errorChan <- err 	
 			}
@@ -254,6 +255,49 @@ func (i *Instance) elasticTopicQueryHits(userId int64, topicId string, queryStri
 	}
 
 	return stats, cases, nil
+}
+
+
+func (i *Instance) elasticTopicDocListQuery(userId int64, topicId string) ([]queryRes, []ApiCaseResponse, error) {
+	ids := i.docList[topicId]
+	exclude := i.excludeList[topicId]
+	query := map[string]interface{}{
+		"filter": map[string]interface{}{
+			"should": map[string]interface{}{
+				"ids": map[string]interface{}{
+					"values": ids,
+				},
+			},
+			"must_not": map[string]interface{}{
+				"ids": map[string]interface{}{
+					"values": exclude,
+				},
+			},
+		},
+	}
+
+	qry, err := json.Marshal(query)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	fmt.Printf("Query: %s\n", qry)
+
+	esRes, err := i.es.Search(i.searchIndex, qry, "")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	api, err := i.elasticSearchToApiSearchResponse(userId, topicId, esRes)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return []queryRes{{
+		Text: i.topics[topicId].Topic,
+		Results: len(api.Results),
+		PooledResults: len(api.Results),
+	}}, api.Results, nil
 }
 
 

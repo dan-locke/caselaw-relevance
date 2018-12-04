@@ -16,7 +16,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 
-	elastic "elastic-go"
+	elastic "github.com/danlocke/elastic-go"
 )
 
 const CONFIG_PATH string = "config.json"
@@ -68,6 +68,8 @@ type Config struct {
 	Topics struct {
 
 		DataFileName string `json:"data_file_name"`
+		
+		AssessedFile string `json:"assessed_file"`
 
 		Location     string `json:"location"`
 
@@ -93,6 +95,12 @@ type Instance struct {
 	docType string
 
 	topics map[string]Topic
+
+	byList bool
+
+	excludeList map[string][]string
+
+	docList map[string][]string
 
 	templates map[string]*template.Template
 
@@ -239,6 +247,7 @@ Search classifier
 
 	loadTopic := flag.Bool("l", false, "Load stored topics")
 	updateTopics := flag.Bool("u", false, "Update stored topics")
+	byDocList := flag.String("d", "", "Load doc list and judge only given docs [if empty then no]")
 	flag.Parse()
 
 	topics, err := loadTopics(instance.dir, instance.config.Topics.Location,
@@ -253,6 +262,27 @@ Search classifier
 	// // 	log.Panic(err)
 	// // }
 	// // log.Println("topics results loaded.")
+
+	if instance.config.Topics.AssessedFile != "" {
+		exclude, err := loadQrel(instance.config.Topics.AssessedFile)
+		if err != nil {
+			log.Panic(err)
+		}
+		instance.excludeList = exclude
+	}
+	//else {
+	//	instance.excludeList = map[string][]string{}
+	//}
+
+	if *byDocList != "" {
+		instance.byList = true
+		docs, err := loadTopicIdFile(*byDocList)
+		if err != nil {
+			log.Panic(err)
+		}
+
+		instance.docList = docs
+	}
 
 	templates, err := loadTemplates(instance.config.Server.Templates.BaseLayout,
 		instance.config.Server.Templates.LayoutDirectory,
